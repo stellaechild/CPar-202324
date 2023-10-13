@@ -1,6 +1,6 @@
 CC = gcc
 SRC = src/
-CFLAGS = # none
+CFLAGS = -O2 -g -fno-omit-frame-pointer
 
 .DEFAULT_GOAL = MD.exe
 
