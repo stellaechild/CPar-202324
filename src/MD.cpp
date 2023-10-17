@@ -489,6 +489,7 @@ double Potential() {
 //   Uses the derivative of the Lennard-Jones potential to calculate
 //   the forces on each atom.  Then uses a = F/m to calculate the
 //   accelleration of each atom. 
+/*
 void computeAccelerations() {
     int i, j, k;
     double f, rSqd;
@@ -496,9 +497,12 @@ void computeAccelerations() {
     
     
     for (i = 0; i < N; i++) {  // set all accelerations to zero
-        for (k = 0; k < 3; k++) {
-            a[i][k] = 0;
-        }
+        //Loop 
+        //for (k = 0; k < 3; k++) {
+          //  a[i][k] = 0;
+      //  }
+      //Loop unrolled
+        a[i][0]=a[i][1]=a[i][2]=0;
     }
     for (i = 0; i < N-1; i++) {   // loop over all distinct pairs i,j
         for (j = i+1; j < N; j++) {
@@ -516,6 +520,33 @@ void computeAccelerations() {
             f = 24 * (2 * pow(rSqd, -7) - pow(rSqd, -4));
             for (k = 0; k < 3; k++) {
                 //  from F = ma, where m = 1 in natural units!
+                a[i][k] += rij[k] * f;
+                a[j][k] -= rij[k] * f;
+            }
+        }
+    }
+}
+*/
+void computeAccelerationsOptimized() {
+    for (int i = 0; i < N; i++) {
+        a[i][0] = a[i][1] = a[i][2] = 0;
+    }
+
+    for (int i = 0; i < N - 1; i++) {
+        for (int j = i + 1; j < N; j++) {
+            double rij[3];
+            double rSqd = 0;
+
+            for (int k = 0; k < 3; k++) {
+                rij[k] = r[i][k] - r[j][k];
+                rSqd += rij[k] * rij[k];
+            }
+
+            double rSqd4 = rSqd * rSqd;
+            double rSqd7 = rSqd4 * rSqd * rSqd;
+            double f = 24 * (2 / rSqd7 - 1 / rSqd4);
+
+            for (int k = 0; k < 3; k++) {
                 a[i][k] += rij[k] * f;
                 a[j][k] -= rij[k] * f;
             }
