@@ -457,6 +457,7 @@ double Kinetic() { //Write Function here!
 
 
 // Function to calculate the potential energy of the system
+/*
 double Potential() {
     double quot, r2, rnorm, term1, term2, Pot;
     int i, j, k;
@@ -483,7 +484,35 @@ double Potential() {
     
     return Pot;
 }
+*/
+double Potential() {
+    double Pot = 0.0;
 
+    for (int i = 0; i < N; i++) {
+        for (int j = i + 1; j < N; j++) {
+            double r2 = 0.0;
+
+            for (int k = 0; k < 3; k++) {
+                double diff = r[i][k] - r[j][k];
+                r2 += diff * diff;
+            }
+
+            double rnorm = sqrt(r2);
+            double quot = sigma / rnorm;
+
+            // Calculate term1 and term2 in a single step.
+            double quot2 = quot * quot;
+            double quot4 = quot2 * quot2;
+            double term12 = quot4 * quot4;
+            double term22 = quot4 * quot2;
+
+            // Simplify the potential calculation.
+            Pot += 4.0 * epsilon * term12 * (term12 - term22);
+        }
+    }
+
+    return Pot;
+}
 
 
 //   Uses the derivative of the Lennard-Jones potential to calculate
@@ -527,7 +556,7 @@ void computeAccelerations() {
     }
 }
 */
-void computeAccelerationsOptimized() {
+void computeAccelerations() {
     for (int i = 0; i < N; i++) {
         a[i][0] = a[i][1] = a[i][2] = 0;
     }
