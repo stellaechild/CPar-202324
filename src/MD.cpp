@@ -457,7 +457,7 @@ double Kinetic() { //Write Function here!
 
 
 // Function to calculate the potential energy of the system
-/*
+
 double Potential() {
     double quot, r2, rnorm, term1, term2, Pot;
     int i, j, k;
@@ -484,7 +484,7 @@ double Potential() {
     
     return Pot;
 }
-*/
+/*
 double Potential() {
     double Pot = 0.0;
 
@@ -514,11 +514,11 @@ double Potential() {
     return Pot;
 }
 
-
+*/
 //   Uses the derivative of the Lennard-Jones potential to calculate
 //   the forces on each atom.  Then uses a = F/m to calculate the
 //   accelleration of each atom. 
-/*
+
 void computeAccelerations() {
     int i, j, k;
     double f, rSqd;
@@ -555,7 +555,7 @@ void computeAccelerations() {
         }
     }
 }
-*/
+/*
 void computeAccelerations() {
     for (int i = 0; i < N; i++) {
         a[i][0] = a[i][1] = a[i][2] = 0;
@@ -582,7 +582,7 @@ void computeAccelerations() {
         }
     }
 }
-
+*/
 // returns sum of dv/dt*m/A (aka Pressure) from elastic collisions with walls
 double VelocityVerlet(double dt, int iter, FILE *fp) {
     int i, j, k;
