@@ -361,6 +361,18 @@ int main()
     return 0;
 }
 
+float FastInvSqrt(float x) {
+    float xhalf = 0.5f * x;
+    int i = *(int*)&x;  // Convert floating-point bits to integer
+    i = 0x5f3759df - (i >> 1);  // Initial guess based on bit manipulation
+    x = *(float*)&i;  // Convert integer bits back to floating-point
+    x = x * (1.5f - xhalf * x * x);  // Refinement using Newton's method
+    return x;
+}
+
+float FastSqrt(float x) {
+    return 1.0f / FastInvSqrt(x);
+}
 
 void initialize() {
     int n, p, i, j, k;
@@ -471,10 +483,17 @@ double Potential() {
                 for (k=0; k<3; k++) {
                     r2 += (r[i][k]-r[j][k])*(r[i][k]-r[j][k]);
                 }
-                rnorm=sqrt(r2);
-                quot=sigma/rnorm;
-                term1 = pow(quot,12.);
-                term2 = pow(quot,6.);
+                rnorm=FastSqrt(r2);
+                quot = sigma / rnorm;
+                double quot2 = quot * quot;
+                double quot4 = quot2 * quot2;
+
+// Calculate term1 as pow(quot, 12) using squaring
+                double quot8 = quot4 * quot4;
+                double term1 = quot4 * quot8;
+
+// Calculate term2 as pow(quot, 6) using squaring
+                double term2 = quot4 * quot2;
                 
                 Pot += 4*epsilon*(term1 - term2);
                 
