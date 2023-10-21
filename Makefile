@@ -8,7 +8,7 @@ MD.exe: $(SRC)/MD.cpp
 	$(CC) $(CFLAGS) $(SRC)MD.cpp -lm -o MD.exe
 
 clean:
-	rm ./MD.exe
+	rm ./MD.exe cp_*
 
 run:
 	./MD.exe < inputdata.txt
