@@ -71,7 +71,7 @@ double VelocityVerlet(double dt, int iter, FILE *fp);
 //  solve F = ma for use in Velocity Verlet
 void computeAccelerations();
 
-double sqrt(double x);
+double fastSqrt(double x);
 //  Numerical Recipes function for generation gaussian distribution
 double gaussdist();
 //  Initialize velocities according to user-supplied initial Temperature (Tinit)
@@ -122,7 +122,7 @@ int main()
      *     energy:   1.96183e-21 J      = one natural unit of energy for argon, directly from L-J parameters
      *     length:   3.3605e-10  m         = one natural unit of length for argon, directly from L-J parameters
      *     volume:   3.79499-29 m^3        = one natural unit of volume for argon, by length^3
-     *     time:     1.951e-12 s           = one natural unit of time for argon, by length*sqrt(mass/energy)
+     *     time:     1.951e-12 s           = one natural unit of time for argon, by length*fastSqrt(mass/energy)
      ***************************************************************************************/
     
     //  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -365,7 +365,7 @@ int main()
     return 0;
 }
 
-double sqrt(double x) {
+double fastSqrt(double x) {
     double xhalf = 0.5 * x;
     int64_t i = *(int64_t*)&x;  // Convert double bits to int64_t
     i = 0x5fe6ec85e7de30da - (i >> 1);  // Initial guess based on bit manipulation
@@ -642,7 +642,7 @@ void initializeVelocities() {
         vSqdSum += v[i][0]*v[i][0]+ v[i][1]*v[i][1]+ v[i][2]*v[i][2];
     }
     
-    lambda = sqrt( 3*(N-1)*Tinit/vSqdSum);
+    lambda = fastSqrt( 3*(N-1)*Tinit/vSqdSum);
     
     for (i=0; i<N; i++) {
         v[i][0] *= lambda;
@@ -664,7 +664,7 @@ double gaussdist() {
             rsq = v1 * v1 + v2 * v2;
         } while (rsq >= 1.0 || rsq == 0.0);
         
-        fac = sqrt(-2.0 * log(rsq) / rsq);
+        fac = fastSqrt(-2.0 * log(rsq) / rsq);
         gset = v1 * fac;
         available = true;
         
