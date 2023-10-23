@@ -462,8 +462,6 @@ double Potential()
 {
     double quot, r2, rnorm, term1, term2, Pot;
     int i, j, k;
-    // Added Variables
-    double rik, rjk;
 
     Pot = 0.;
     for (i = 0; i < N; i++)
@@ -473,11 +471,10 @@ double Potential()
 
             if (j != i)
             {
-                rik = r[i][k]; rjk = r[j][k];
                 r2 = 0.;
                 for (k = 0; k < 3; k++)
                 {
-                    r2 += (rik - rjk) * (rik - rjk);
+                    r2 += (r[i][k] - r[j][k]) * (r[i][k] - r[j][k]);
                 }
                 rnorm = sqrt(r2);
                 quot = sigma / rnorm;
@@ -500,7 +497,6 @@ void computeAccelerations()
     int i, j, k;
     double f, rSqd;
     double rij[3]; // position of i relative to j
-    double rij_store, rik_store, rjk_store;
 
     for (i = 0; i < N; i++)
     { // set all accelerations to zero
@@ -517,13 +513,11 @@ void computeAccelerations()
             rSqd = 0;
 
             for (k = 0; k < 3; k++)
-            { 
-                rik_store = r[i][k]; rjk_store = r[j][k];
+            {
                 //  component-by-componenent position of i relative to j
-                rij[k] = rik_store - rjk_store;
-                rij_store = rij[k];
+                rij[k] = r[i][k] - r[j][k];
                 //  sum of squares of the components
-                rSqd += rij_store * rij_store;
+                rSqd += rij[k] * rij[k];
             }
 
             //  From derivative of Lennard-Jones with sigma and epsilon set equal to 1 in natural units!
@@ -531,9 +525,8 @@ void computeAccelerations()
             for (k = 0; k < 3; k++)
             {
                 //  from F = ma, where m = 1 in natural units!
-                rij_store = rij[k];
-                a[i][k] += rij_store * f;
-                a[j][k] -= rij_store * f;
+                a[i][k] += rij[k] * f;
+                a[j][k] -= rij[k] * f;
             }
         }
     }
@@ -543,7 +536,7 @@ void computeAccelerations()
 double VelocityVerlet(double dt, int iter, FILE *fp)
 {
     int i, j, k;
-    double rij ,vij, aij;
+
     double psum = 0.;
 
     //  Compute accelerations from forces at current position
@@ -555,10 +548,9 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     {
         for (j = 0; j < 3; j++)
         {
-            vij = v[i][j]; aij = a[i][j];
-            r[i][j] += vij * dt + 0.5 * aij * dt * dt;
+            r[i][j] += v[i][j] * dt + 0.5 * a[i][j] * dt * dt;
 
-            v[i][j] += 0.5 * aij * dt;
+            v[i][j] += 0.5 * a[i][j] * dt;
         }
         // printf("  %i  %6.4e   %6.4e   %6.4e\n",i,r[i][0],r[i][1],r[i][2]);
     }
@@ -569,8 +561,7 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     {
         for (j = 0; j < 3; j++)
         {
-            aij = a[i][j];
-            v[i][j] += 0.5 * aij * dt;
+            v[i][j] += 0.5 * a[i][j] * dt;
         }
     }
 
@@ -579,18 +570,15 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     {
         for (j = 0; j < 3; j++)
         {
-            rij = r[i][j]; vij = v[i][j];
-            if (rij < 0.)
+            if (r[i][j] < 0.)
             {
-                vij *= -1.;                     //- elastic walls
-                psum += 2 * m * fabs(vij) / dt; // contribution to pressure from "left" walls
-                v[i][j] = vij;
+                v[i][j] *= -1.;                     //- elastic walls
+                psum += 2 * m * fabs(v[i][j]) / dt; // contribution to pressure from "left" walls
             }
-            if (rij >= L)
+            if (r[i][j] >= L)
             {
-                vij *= -1.;                     //- elastic walls
-                psum += 2 * m * fabs(vij) / dt; // contribution to pressure from "right" walls
-                v[i][j] = vij;
+                v[i][j] *= -1.;                     //- elastic walls
+                psum += 2 * m * fabs(v[i][j]) / dt; // contribution to pressure from "right" walls
             }
         }
     }
