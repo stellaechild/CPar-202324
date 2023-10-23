@@ -11,7 +11,7 @@ clean:
 	rm ./MD.exe gmon.out main.gprof *_average.txt *_output.txt *_traj.xyz
 
 run:
-	perf stat -M cpi -e cache-misses,instructions,cycles ./MD.exe
+	srun --partition=cpar perf stat -M cpi -e cache-misses,instructions,cycles ./MD.exe < inputdata.txt
 
 status:
 	gprof ./MD.exe > main.gprof
