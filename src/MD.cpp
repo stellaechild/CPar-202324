@@ -235,7 +235,14 @@ int main()
     }
     // Vol = L*L*L;
     // Length of the box in natural units:
-    L = pow(Vol, (1. / 3));
+    //calculating cube root instead of using pow
+    double x0 = Vol;  // Initial guess
+    double x1 = (2 * x0 + Vol / (x0 * x0)) / 3.0; 
+    while (x0 - x1 > 1e-9 || x1 - x0 > 1e-9) {
+        x0 = x1;
+        x1 = (2 * x0 + Vol / (x0 * x0)) / 3.0;
+    }
+    L = x1;
 
     //  Files that we can write different quantities to
     tfp = fopen(tfn, "w"); //  The MD trajectory, coordinates of every particle at each timestep
@@ -367,9 +374,15 @@ void initialize()
 {
     int n, p, i, j, k;
     double pos;
-
+//calculating cube root instead of using pow
+    double x0 = N;  // Initial guess
+    double x1 = (2 * x0 + N / (x0 * x0)) / 3.0; 
+    while (x0 - x1 > 1e-9 || x1 - x0 > 1e-9) {
+        x0 = x1;
+        x1 = (2 * x0 + N / (x0 * x0)) / 3.0;
+    }
     // Number of atoms in each direction
-    n = int(ceil(pow(N, 1.0 / 3)));
+    n = int(ceil(x1));
 
     //  spacing between atoms along a given direction
     pos = L / n;
@@ -476,10 +489,10 @@ double Potential()
                 {
                     r2 += (r[i][k] - r[j][k]) * (r[i][k] - r[j][k]);
                 }
-                rnorm = sqrt(r2);
+                rnorm = fastSqrt(r2);
                 quot = sigma / rnorm;
-                term1 = pow(quot, 12.);
-                term2 = pow(quot, 6.);
+                term1 = quot*quot*quot*quot*quot*quot*quot*quot*quot*quot*quot*quot;
+                term2 = quot*quot*quot*quot*quot*quot;
 
                 Pot += 4 * epsilon * (term1 - term2);
             }
@@ -489,6 +502,14 @@ double Potential()
     return Pot;
 }
 
+double fastSqrt(float x) {
+    double xhalf = 0.5f * x;
+    int i = *(int*)&x;  // Convert floating-point bits to integer
+    i = 0x5f3759df - (i >> 1);  // Initial guess based on bit manipulation
+    x = *(double*)&i;  // Convert integer bits back to floating-point
+    x = x * (1.5f - xhalf * x * x);  // Refinement using Newton's method
+    return 1.0f/x;
+}
 //   Uses the derivative of the Lennard-Jones potential to calculate
 //   the forces on each atom.  Then uses a = F/m to calculate the
 //   accelleration of each atom.
@@ -521,7 +542,11 @@ void computeAccelerations()
             }
 
             //  From derivative of Lennard-Jones with sigma and epsilon set equal to 1 in natural units!
-            f = 24 * (2 * pow(rSqd, -7) - pow(rSqd, -4));
+            double rSqd7 = 1/(rSqd*rSqd*rSqd*rSqd*rSqd*rSqd*rSqd);
+        
+            double rSqd4 = 1/(rSqd*rSqd*rSqd*rSqd);
+        
+            f = 24 * (2 * rSqd7 - rSqd4);
             for (k = 0; k < 3; k++)
             {
                 //  from F = ma, where m = 1 in natural units!
@@ -653,7 +678,7 @@ void initializeVelocities()
         }
     }
 
-    lambda = sqrt(3 * (N - 1) * Tinit / vSqdSum);
+    lambda = fastSqrt(3 * (N - 1) * Tinit / vSqdSum);
 
     for (i = 0; i < N; i++)
     {
@@ -680,7 +705,7 @@ double gaussdist()
             rsq = v1 * v1 + v2 * v2;
         } while (rsq >= 1.0 || rsq == 0.0);
 
-        fac = sqrt(-2.0 * log(rsq) / rsq);
+        fac = fastSqrt(-2.0 * log(rsq) / rsq);
         gset = v1 * fac;
         available = true;
 
