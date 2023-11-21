@@ -30,7 +30,7 @@
 
 
 // Number of particles
-int N;
+int N = 5000;
 
 //  Lennard-Jones parameters in natural units!
 double sigma = 1.;
