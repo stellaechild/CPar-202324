@@ -6,13 +6,13 @@ CFLAGS = -fopenmp -pg -ftree-vectorize -msse4 -mavx -mtune=native -fno-omit-fram
 
 all: MDseq.exe MDpar.exe
 
-MDseq.exe: $(SRC)/MD.cpp
+MDseq.exe: $(SRC)/MDseq.cpp
 	module load gcc/11.2.0;
-	$(CC) $(CFLAGS) $(SRC)MD.cpp -lm -Ofast -o MDseq.exe
+	$(CC) $(CFLAGS) $(SRC)MDseq.cpp -lm -Ofast -o MDseq.exe
 
-MDpar.exe: $(SRC)/MD.cpp
+MDpar.exe: $(SRC)/MDpar.cpp
 	module load gcc/11.2.0;
-	$(CC) $(CFLAGS) $(SRC)MD.cpp -fopenmp -lm -o MDpar.exe
+	$(CC) $(CFLAGS) $(SRC)MDpar.cpp -fopenmp -lm -o MDpar.exe
 
 clean:
 	rm ./MD*.exe
