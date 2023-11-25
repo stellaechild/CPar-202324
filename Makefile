@@ -1,18 +1,18 @@
 CC = gcc
 SRC = src/
-CFLAGS = -O2
+CFLAGS = -fopenmp -pg -ftree-vectorize -msse4 -mavx -mtune=native -fno-omit-frame-pointer -Ofast -march=native -Wall -Wextra -Wpedantic -Wfatal-errors -Wshadow -Wcast-align -ffast-math -O3 -fno-exceptions -fno-rtti #-O2
 
 .DEFAULT_GOAL = all
 
 all: MDseq.exe MDpar.exe
 
-MDseq.exe: $(SRC)/MDseq.cpp
+MDseq.exe: $(SRC)/MD.cpp
 	module load gcc/11.2.0;
-	$(CC) $(CFLAGS) $(SRC)MDseq.cpp -lm -o MDseq.exe
+	$(CC) $(CFLAGS) $(SRC)MD.cpp -lm -Ofast -o MDseq.exe
 
-MDpar.exe: $(SRC)/MDpar.cpp
+MDpar.exe: $(SRC)/MD.cpp
 	module load gcc/11.2.0;
-	$(CC) $(CFLAGS) $(SRC)MDpar.cpp -fopenmp -lm -o MDpar.exe
+	$(CC) $(CFLAGS) $(SRC)MD.cpp -fopenmp -lm -o MDpar.exe
 
 clean:
 	rm ./MD*.exe

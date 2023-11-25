@@ -469,6 +469,7 @@ double Potential() {
     int i, j, k;
     
     Pot=0.;
+    #pragma omp parallel for num_threads(6)
     for (i=0; i<N; i++) {
         double r0i, r1i, r2i;
         r0i = r[i][0];
