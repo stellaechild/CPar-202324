@@ -506,7 +506,8 @@ void computeAccelerations() {
     double rij[3]; // position of i relative to j
     double rij0, rij1, rij2;
     double r0i, r1i, r2i;
-    
+    #pragma omp parallel for num_threads(6)
+    #pragma omp reduction(+:a[:N][:])
     for (i = 0; i < N; i++) {  
         // set all accelerations to zero
         a[i][0] = a[i][1] = a[i][2] = 0;
