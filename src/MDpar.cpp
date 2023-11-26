@@ -507,23 +507,26 @@ void computeAccelerations() {
         for (j = i+1; j < N; j++) {
             // initialize r^2 to zero
             rSqd = 0;
-            rij[0] = r0i - r[j][0];
-            rij[1] = r1i - r[j][1];
-            rij[2] = r2i - r[j][2];
-            rSqd = rij[0]*rij[0] + rij[1]*rij[1] + rij[2]*rij[2];
+            rij0 = r0i - r[j][0];
+            rij1 = r1i - r[j][1];
+            rij2 = r2i - r[j][2];
+            rij[0]=rij0;
+            rij[1]=rij1;
+            rij[2]=rij2;
+            rSqd = rij0*rij0 + rij1*rij1 + rij2*rij2;
             
             //  From derivative of Lennard-Jones with sigma and epsilon set equal to 1 in natural units!
             double rSqd7 = 1/(rSqd*rSqd*rSqd*rSqd*rSqd*rSqd*rSqd);
             double rSqd4 = 1/(rSqd*rSqd*rSqd*rSqd);
             f = 24 * (2 * rSqd7 - rSqd4);
-            a[i][0] += rij[0] * f;
-            a[j][0] -= rij[0] * f;
+            a[i][0] += rij0 * f;
+            a[j][0] -= rij0 * f;
 
-            a[i][1] += rij[1] * f;
-            a[j][1] -= rij[1] * f;
+            a[i][1] += rij1 * f;
+            a[j][1] -= rij1 * f;
 
-            a[i][2] += rij[2] * f;
-            a[j][2] -= rij[2] * f;
+            a[i][2] += rij2 * f;
+            a[j][2] -= rij2 * f;
         }
     }
 }
