@@ -211,7 +211,6 @@ int main()
     
     scanf("%lf",&rho);
     
-    N = 10*216;
     Vol = N/(rho*NA);
     
     Vol /= VolFac;
