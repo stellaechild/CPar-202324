@@ -282,6 +282,7 @@ int main()
     int tenp = floor(NumTime/10);
     fprintf(ofp,"  time (s)              T(t) (K)              P(t) (Pa)           Kinetic En. (n.u.)     Potential En. (n.u.) Total En. (n.u.)\n");
     printf("  PERCENTAGE OF CALCULATION COMPLETE:\n  [");
+    
     for (i=0; i<NumTime+1; i++) {
         
         //  This just prints updates on progress of the calculation for the users convenience
@@ -462,6 +463,8 @@ double Potential() {
     int i, j, k;
     
     Pot=0.;
+    #pragma omp parallel for num_threads(6)
+    #pragma omp private(Pot)
     for (i=0; i<N; i++) {
         r0i = r[i][0];
         r1i = r[i][1];
@@ -489,7 +492,8 @@ void computeAccelerations() {
     double rij[3]; // position of i relative to j
     double rij0, rij1, rij2;
     double r0i, r1i, r2i;
-    
+    #pragma omp parallel for
+    #pragma omp reduction(+:a[:N][:])
     for (i = 0; i < N; i++) {  
         // set all accelerations to zero
         a[i][0] = a[i][1] = a[i][2] = 0;

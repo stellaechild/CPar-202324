@@ -4,7 +4,7 @@ CFLAGS = -fopenmp -pg -ftree-vectorize -msse4 -mavx -mtune=native -fno-omit-fram
 
 .DEFAULT_GOAL = all
 #module load gcc/11.2.0;
-all: MDseq.exe MDpar.exee
+all: MDseq.exe MDpar.exe
 
 MDseq.exe: $(SRC)/MDseq.cpp
 	$(CC) $(CFLAGS) $(SRC)MDseq.cpp -lm -o MDseq.exe
