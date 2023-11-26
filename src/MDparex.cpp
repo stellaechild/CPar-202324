@@ -27,10 +27,10 @@
 #include<stdlib.h>
 #include<math.h>
 #include<string.h>
-
+#include <omp.h>
 
 // Number of particles
-int N=5000;
+int N = 5000;
 
 //  Lennard-Jones parameters in natural units!
 double sigma = 1.;
@@ -66,16 +66,19 @@ void initialize();
 //  update positions and velocities using Velocity Verlet algorithm 
 //  print particle coordinates to file for rendering via VMD or other animation software
 //  return 'instantaneous pressure'
-double VelocityVerlet(double dt, int iter, FILE *fp);  
+double VelocityVerlet(double dt, int iter, FILE *fp); 
 //  Compute Force using F = -dV/dr
 //  solve F = ma for use in Velocity Verlet
 void computeAccelerations();
+
+double fastSqrt(double x);
 //  Numerical Recipes function for generation gaussian distribution
 double gaussdist();
 //  Initialize velocities according to user-supplied initial Temperature (Tinit)
 void initializeVelocities();
 //  Compute total potential energy from particle coordinates
 double Potential();
+
 //  Compute mean squared velocity from particle velocities
 double MeanSquaredVelocity();
 //  Compute total kinetic energy from particle mass and velocities
@@ -119,7 +122,7 @@ int main()
      *     energy:   1.96183e-21 J      = one natural unit of energy for argon, directly from L-J parameters
      *     length:   3.3605e-10  m         = one natural unit of length for argon, directly from L-J parameters
      *     volume:   3.79499-29 m^3        = one natural unit of volume for argon, by length^3
-     *     time:     1.951e-12 s           = one natural unit of time for argon, by length*sqrt(mass/energy)
+     *     time:     1.951e-12 s           = one natural unit of time for argon, by length*fastSqrt(mass/energy)
      ***************************************************************************************/
     
     //  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -237,7 +240,8 @@ int main()
     }
     // Vol = L*L*L;
     // Length of the box in natural units:
-    L =cbrt(Vol);
+    
+    L = cbrt(Vol);
     
     //  Files that we can write different quantities to
     tfp = fopen(tfn,"w");     //  The MD trajectory, coordinates of every particle at each timestep
@@ -325,7 +329,7 @@ int main()
         Tavg += Temp;
         Pavg += Press;
         
-        fprintf(ofp,"  %8.4e  %20.8f  %20.8f %20.8f  %20.8f  %20.8f \n",i*dt*timefac,Temp,Press,KE, PE, KE+PE);
+        fprintf(ofp,"  %8.4e  %4.0f  %12.0f %11.0f  %11.0f  %12.0f \n",i*dt*timefac,Temp,Press,KE, PE, KE+PE);
         
         
     }
@@ -361,6 +365,14 @@ int main()
     return 0;
 }
 
+double fastSqrt(double x) {
+    double xhalf = 0.5 * x;
+    int64_t i = *(int64_t*)&x;  // Convert double bits to int64_t
+    i = 0x5fe6ec85e7de30da - (i >> 1);  // Initial guess based on bit manipulation
+    x = *(double*)&i;  // Convert int64_t bits back to double
+    x = x * (1.5 - xhalf * x * x);  // Refinement using Newton's method
+    return (1/x);
+}
 
 void initialize() {
     int n, p, i, j, k;
@@ -441,11 +453,7 @@ double Kinetic() { //Write Function here!
     for (int i=0; i<N; i++) {
         
         v2 = 0.;
-        for (int j=0; j<3; j++) {
-            
-            v2 += v[i][j]*v[i][j];
-            
-        }
+        v2 += v[i][0]*v[i][0]+v[i][1]*v[i][1]+v[i][2]*v[i][2];
         kin += m*v2/2.;
         
     }
@@ -455,26 +463,32 @@ double Kinetic() { //Write Function here!
     
 }
 
-
 // Function to calculate the potential energy of the system
 double Potential() {
-    double quot, r2, r0i, r1i, r2i, rnorm, term1, term2, Pot;
+    double quot, r2, rnorm, term1, term2, Pot;
     int i, j, k;
     
     Pot=0.;
+    
     for (i=0; i<N; i++) {
+        double r0i, r1i, r2i;
         r0i = r[i][0];
         r1i = r[i][1];
         r2i = r[i][2];
-        for (j=0; j<N && j!=i; j++) {
+        for (j=0; j<N && j != i; j++) {
             r2=0.;
-            r2 += ((r0i-r[j][0])*(r0i-r[j][0])) + ((r1i-r[j][1])*(r1i-r[j][1])) + ((r2i-r[j][2])*(r2i-r[j][2]));
+            double r0j, r1j, r2j;
+            r0j = r0i - r[j][0];
+            r1j = r1i - r[j][1];
+            r2j = r2i - r[j][2];
+            r2 += r0j*r0j + r1j*r1j + r2j*r2j;
             quot=sigma/r2;
             term1 = quot*quot*quot*quot*quot*quot;
             term2 = quot*quot*quot;
             
             Pot += 4*epsilon*(term1 - term2);
-                
+            
+            
         }
     }
     
@@ -483,6 +497,9 @@ double Potential() {
 
 
 
+//   Uses the derivative of the Lennard-Jones potential to calculate
+//   the forces on each atom.  Then uses a = F/m to calculate the
+//   accelleration of each atom. 
 void computeAccelerations() {
     int i, j, k;
     double f, rSqd;
@@ -524,7 +541,6 @@ void computeAccelerations() {
     }
 }
 
-
 // returns sum of dv/dt*m/A (aka Pressure) from elastic collisions with walls
 double VelocityVerlet(double dt, int iter, FILE *fp) {
     int i, j, k;
@@ -537,20 +553,23 @@ double VelocityVerlet(double dt, int iter, FILE *fp) {
     //  Update positions and velocity with current velocity and acceleration
     //printf("  Updated Positions!\n");
     for (i=0; i<N; i++) {
-        for (j=0; j<3; j++) {
-            r[i][j] += v[i][j]*dt + 0.5*a[i][j]*dt*dt;
-            
-            v[i][j] += 0.5*a[i][j]*dt;
-        }
+        r[i][0] += v[i][0]*dt + 0.5*a[i][0]*dt*dt;
+        v[i][0] += 0.5*a[i][0]*dt;
+
+        r[i][1] += v[i][1]*dt + 0.5*a[i][1]*dt*dt;
+        v[i][1] += 0.5*a[i][1]*dt;
+
+        r[i][2] += v[i][2]*dt + 0.5*a[i][2]*dt*dt;
+        v[i][2] += 0.5*a[i][2]*dt;
         //printf("  %i  %6.4e   %6.4e   %6.4e\n",i,r[i][0],r[i][1],r[i][2]);
     }
     //  Update accellerations from updated positions
     computeAccelerations();
     //  Update velocity with updated acceleration
     for (i=0; i<N; i++) {
-        for (j=0; j<3; j++) {
-            v[i][j] += 0.5*a[i][j]*dt;
-        }
+        v[i][0] += 0.5*a[i][0]*dt;
+        v[i][1] += 0.5*a[i][1]*dt;
+        v[i][2] += 0.5*a[i][2]*dt;
     }
     
     // Elastic walls
@@ -587,12 +606,9 @@ void initializeVelocities() {
     int i, j;
     
     for (i=0; i<N; i++) {
-        
-        for (j=0; j<3; j++) {
-            //  Pull a number from a Gaussian Distribution
-            v[i][j] = gaussdist();
-            
-        }
+        v[i][0] = gaussdist();
+        v[i][1] = gaussdist();
+        v[i][2] = gaussdist();
     }
     
     // Vcm = sum_i^N  m*v_i/  sum_i^N  M
@@ -600,26 +616,23 @@ void initializeVelocities() {
     double vCM[3] = {0, 0, 0};
     
     for (i=0; i<N; i++) {
-        for (j=0; j<3; j++) {
-            
-            vCM[j] += m*v[i][j];
-            
-        }
+        vCM[0] += m*v[i][0];
+        vCM[1] += m*v[i][1];
+        vCM[2] += m*v[i][2];
     }
     
-    
-    for (i=0; i<3; i++) vCM[i] /= N*m;
+    vCM[0] /= N*m;
+    vCM[1] /= N*m;
+    vCM[2] /= N*m;
     
     //  Subtract out the center-of-mass velocity from the
     //  velocity of each particle... effectively set the
     //  center of mass velocity to zero so that the system does
     //  not drift in space!
     for (i=0; i<N; i++) {
-        for (j=0; j<3; j++) {
-            
-            v[i][j] -= vCM[j];
-            
-        }
+        v[i][0] -= vCM[0];
+        v[i][1] -= vCM[1];
+        v[i][2] -= vCM[2];
     }
     
     //  Now we want to scale the average velocity of the system
@@ -627,21 +640,15 @@ void initializeVelocities() {
     double vSqdSum, lambda;
     vSqdSum=0.;
     for (i=0; i<N; i++) {
-        for (j=0; j<3; j++) {
-            
-            vSqdSum += v[i][j]*v[i][j];
-            
-        }
+        vSqdSum += v[i][0]*v[i][0]+ v[i][1]*v[i][1]+ v[i][2]*v[i][2];
     }
     
-    lambda = sqrt( 3*(N-1)*Tinit/vSqdSum);
+    lambda = fastSqrt( 3*(N-1)*Tinit/vSqdSum);
     
     for (i=0; i<N; i++) {
-        for (j=0; j<3; j++) {
-            
-            v[i][j] *= lambda;
-            
-        }
+        v[i][0] *= lambda;
+        v[i][1] *= lambda;
+        v[i][2] *= lambda;
     }
 }
 
@@ -658,7 +665,7 @@ double gaussdist() {
             rsq = v1 * v1 + v2 * v2;
         } while (rsq >= 1.0 || rsq == 0.0);
         
-        fac = sqrt(-2.0 * log(rsq) / rsq);
+        fac = fastSqrt(-2.0 * log(rsq) / rsq);
         gset = v1 * fac;
         available = true;
         
