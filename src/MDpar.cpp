@@ -27,7 +27,7 @@
 #include<stdlib.h>
 #include<math.h>
 #include<string.h>
-
+#include <omp.h>
 
 // Number of particles
 int N=5000;
