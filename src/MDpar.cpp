@@ -551,6 +551,9 @@ double VelocityVerlet(double dt, int iter, FILE *fp) {
     //  Update accellerations from updated positions
     computeAccelerations();
     //  Update velocity with updated acceleration
+
+    #pragma omp parallel for
+    #pragma omp reduction(+:v[:N][:])
     for (i=0; i<N; i++) {
         for (j=0; j<3; j++) {
             v[i][j] += 0.5*a[i][j]*dt;
@@ -558,6 +561,8 @@ double VelocityVerlet(double dt, int iter, FILE *fp) {
     }
     
     // Elastic walls
+
+    #pragma omp private(psum)
     for (i=0; i<N; i++) {
         for (j=0; j<3; j++) {
             if (r[i][j]<0.) {
