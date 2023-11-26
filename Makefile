@@ -20,3 +20,6 @@ runseq:
 
 runpar:
 	srun --partition=cpar perf stat -M cpi -e cache-misses,instructions,cycles ./MDpar.exe < inputdata.txt
+
+run:
+	./MDpar.exe <inputdata.txt
