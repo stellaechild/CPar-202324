@@ -424,7 +424,6 @@ double MeanSquaredVelocity()
     double vy2 = 0;
     double vz2 = 0;
     double v2;
-
     for (int i = 0; i < N; i++)
     {
 
@@ -445,7 +444,6 @@ double Kinetic()
     double v2, kin;
 
     kin = 0.;
-
     for (int i = 0; i < N; i++)
     {
 
@@ -462,31 +460,45 @@ double Kinetic()
     // printf("  Total Kinetic Energy is %f\n",N*mvs*m/2.);
     return kin;
 }
-
-// Function to calculate the potential energy of the system
+ 
 double Potential()
 {
-    double quot, r2, r0i, r1i, r2i, term1, term2, Pot;
-    int i, j, k;
+    double Pot = 0.0;
 
-    Pot = 0.;
-    #pragma omp parallel for num_threads(6) private(Pot)
-
-    for (i = 0; i < N; i++)
+    #pragma omp parallel for num_threads(6)
+    for (int i = 0; i < N; i++)
     {
-        r0i = r[i][0];
-        r1i = r[i][1];
-        r2i = r[i][2];
+        double r0i = r[i][0];
+        double r1i = r[i][1];
+        double r2i = r[i][2];
 
-        for (j = 0; j < N && j != i; j++)
+        #pragma omp parallel sections private(Pot)
         {
-            r2 = 0.;
-            r2 += ((r0i - r[j][0]) * (r0i - r[j][0])) + ((r1i - r[j][1]) * (r1i - r[j][1])) + ((r2i - r[j][2]) * (r2i - r[j][2]));
-            quot = sigma / r2;
-            term1 = quot * quot * quot * quot * quot * quot;
-            term2 = quot * quot * quot;
+            #pragma omp section
+            {
+                for (int j = 0; j < i; j++)
+                {
+                    double r2 = ((r0i - r[j][0]) * (r0i - r[j][0])) + ((r1i - r[j][1]) * (r1i - r[j][1])) + ((r2i - r[j][2]) * (r2i - r[j][2]));
+                    double quot = sigma / r2;
+                    double term1 = quot * quot * quot * quot * quot * quot;
+                    double term2 = quot * quot * quot;
 
-            Pot += 4 * epsilon * (term1 - term2);
+                    Pot += 4 * epsilon * (term1 - term2);
+                }
+            }
+
+            #pragma omp section
+            {
+                for (int j = i + 1; j < N; j++)
+                {
+                    double r2 = ((r0i - r[j][0]) * (r0i - r[j][0])) + ((r1i - r[j][1]) * (r1i - r[j][1])) + ((r2i - r[j][2]) * (r2i - r[j][2]));
+                    double quot = sigma / r2;
+                    double term1 = quot * quot * quot * quot * quot * quot;
+                    double term2 = quot * quot * quot;
+
+                    Pot += 4 * epsilon * (term1 - term2);
+                }
+            }
         }
     }
 
@@ -500,15 +512,17 @@ void computeAccelerations()
     double rij[3]; // position of i relative to j
     double rij0, rij1, rij2;
     double r0i, r1i, r2i;
-
+    # pragma omp parallel for num_threads(6)
+    # pragma omp reduction (+:a[:N][:])
     for (i = 0; i < N; i++)
     {
         // set all accelerations to zero
         a[i][0] = a[i][1] = a[i][2] = 0;
     }
-
+    
     for (i = 0; i < N - 1; i++)
     {
+        double r0i, r1i, r2i;
         r0i = r[i][0];
         r1i = r[i][1];
         r2i = r[i][2];
@@ -545,7 +559,7 @@ void computeAccelerations()
 // returns sum of dv/dt*m/A (aka Pressure) from elastic collisions with walls
 double VelocityVerlet(double dt, int iter, FILE *fp)
 {
-    int i, j;
+    int i, j, k;
 
     double psum = 0.;
 
@@ -570,8 +584,6 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     computeAccelerations();
     //  Update velocity with updated acceleration
 
-    #pragma omp parallel for reduction(+ : v[: N][ : ])
-
     for (i = 0; i < N; i++)
     {
         for (j = 0; j < 3; j++)
@@ -582,7 +594,6 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
 
     // Elastic walls
 
-    #pragma omp private(psum)
 
     for (i = 0; i < N; i++)
     {
@@ -619,7 +630,6 @@ void initializeVelocities()
 {
 
     int i, j;
-
     for (i = 0; i < N; i++)
     {
 
