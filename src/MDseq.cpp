@@ -208,7 +208,6 @@ int main()
 
     scanf("%lf", &rho);
 
-    // N = 10 * 216;
     Vol = N / (rho * NA);
 
     Vol /= VolFac;
@@ -279,6 +278,7 @@ int main()
     int tenp = floor(NumTime / 10);
     fprintf(ofp, "  time (s)              T(t) (K)              P(t) (Pa)           Kinetic En. (n.u.)     Potential En. (n.u.) Total En. (n.u.)\n");
     printf("  PERCENTAGE OF CALCULATION COMPLETE:\n  [");
+
     for (i = 0; i < NumTime + 1; i++)
     {
 
@@ -377,10 +377,13 @@ void initialize()
     //  index for number of particles assigned positions
     p = 0;
     //  initialize positions
+
     for (i = 0; i < n; i++)
     {
+
         for (j = 0; j < n; j++)
         {
+
             for (k = 0; k < n; k++)
             {
                 if (p < N)
@@ -441,10 +444,12 @@ double Kinetic()
     double v2, kin;
 
     kin = 0.;
+
     for (int i = 0; i < N; i++)
     {
 
         v2 = 0.;
+
         for (int j = 0; j < 3; j++)
         {
 
@@ -460,15 +465,17 @@ double Kinetic()
 // Function to calculate the potential energy of the system
 double Potential()
 {
-    double quot, r2, r0i, r1i, r2i, rnorm, term1, term2, Pot;
+    double quot, r2, r0i, r1i, r2i, term1, term2, Pot;
     int i, j, k;
 
     Pot = 0.;
+
     for (i = 0; i < N; i++)
     {
         r0i = r[i][0];
         r1i = r[i][1];
         r2i = r[i][2];
+
         for (j = 0; j < N && j != i; j++)
         {
             r2 = 0.;
@@ -497,34 +504,38 @@ void computeAccelerations()
         // set all accelerations to zero
         a[i][0] = a[i][1] = a[i][2] = 0;
     }
+
     for (i = 0; i < N - 1; i++)
     {
-        double r0i, r1i, r2i;
         r0i = r[i][0];
         r1i = r[i][1];
         r2i = r[i][2];
         // loop over all distinct pairs i,j
+
         for (j = i + 1; j < N; j++)
         {
             // initialize r^2 to zero
             rSqd = 0;
-            rij[0] = r0i - r[j][0];
-            rij[1] = r1i - r[j][1];
-            rij[2] = r2i - r[j][2];
-            rSqd = rij[0] * rij[0] + rij[1] * rij[1] + rij[2] * rij[2];
+            rij0 = r0i - r[j][0];
+            rij1 = r1i - r[j][1];
+            rij2 = r2i - r[j][2];
+            rij[0] = rij0;
+            rij[1] = rij1;
+            rij[2] = rij2;
+            rSqd = rij0 * rij0 + rij1 * rij1 + rij2 * rij2;
 
             //  From derivative of Lennard-Jones with sigma and epsilon set equal to 1 in natural units!
             double rSqd7 = 1 / (rSqd * rSqd * rSqd * rSqd * rSqd * rSqd * rSqd);
             double rSqd4 = 1 / (rSqd * rSqd * rSqd * rSqd);
             f = 24 * (2 * rSqd7 - rSqd4);
-            a[i][0] += rij[0] * f;
-            a[j][0] -= rij[0] * f;
+            a[i][0] += rij0 * f;
+            a[j][0] -= rij0 * f;
 
-            a[i][1] += rij[1] * f;
-            a[j][1] -= rij[1] * f;
+            a[i][1] += rij1 * f;
+            a[j][1] -= rij1 * f;
 
-            a[i][2] += rij[2] * f;
-            a[j][2] -= rij[2] * f;
+            a[i][2] += rij2 * f;
+            a[j][2] -= rij2 * f;
         }
     }
 }
@@ -532,7 +543,7 @@ void computeAccelerations()
 // returns sum of dv/dt*m/A (aka Pressure) from elastic collisions with walls
 double VelocityVerlet(double dt, int iter, FILE *fp)
 {
-    int i, j, k;
+    int i, j;
 
     double psum = 0.;
 
@@ -541,8 +552,10 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     // computeAccelerations();
     //  Update positions and velocity with current velocity and acceleration
     // printf("  Updated Positions!\n");
+
     for (i = 0; i < N; i++)
     {
+
         for (j = 0; j < 3; j++)
         {
             r[i][j] += v[i][j] * dt + 0.5 * a[i][j] * dt * dt;
@@ -554,6 +567,7 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     //  Update accellerations from updated positions
     computeAccelerations();
     //  Update velocity with updated acceleration
+
     for (i = 0; i < N; i++)
     {
         for (j = 0; j < 3; j++)
@@ -563,8 +577,11 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     }
 
     // Elastic walls
+
+
     for (i = 0; i < N; i++)
     {
+
         for (j = 0; j < 3; j++)
         {
             if (r[i][j] < 0.)
@@ -614,6 +631,7 @@ void initializeVelocities()
 
     for (i = 0; i < N; i++)
     {
+
         for (j = 0; j < 3; j++)
         {
 
@@ -628,8 +646,10 @@ void initializeVelocities()
     //  velocity of each particle... effectively set the
     //  center of mass velocity to zero so that the system does
     //  not drift in space!
+
     for (i = 0; i < N; i++)
     {
+
         for (j = 0; j < 3; j++)
         {
 
@@ -641,8 +661,10 @@ void initializeVelocities()
     //  by a factor which is consistent with our initial temperature, Tinit
     double vSqdSum, lambda;
     vSqdSum = 0.;
+
     for (i = 0; i < N; i++)
     {
+
         for (j = 0; j < 3; j++)
         {
 
@@ -654,6 +676,7 @@ void initializeVelocities()
 
     for (i = 0; i < N; i++)
     {
+
         for (j = 0; j < 3; j++)
         {
 

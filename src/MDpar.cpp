@@ -466,7 +466,7 @@ double Kinetic()
 // Function to calculate the potential energy of the system
 double Potential()
 {
-    double quot, r2, r0i, r1i, r2i, rnorm, term1, term2, Pot;
+    double quot, r2, r0i, r1i, r2i, term1, term2, Pot;
     int i, j, k;
 
     Pot = 0.;
@@ -509,7 +509,6 @@ void computeAccelerations()
 
     for (i = 0; i < N - 1; i++)
     {
-        double r0i, r1i, r2i;
         r0i = r[i][0];
         r1i = r[i][1];
         r2i = r[i][2];
@@ -546,7 +545,7 @@ void computeAccelerations()
 // returns sum of dv/dt*m/A (aka Pressure) from elastic collisions with walls
 double VelocityVerlet(double dt, int iter, FILE *fp)
 {
-    int i, j, k;
+    int i, j;
 
     double psum = 0.;
 
@@ -571,7 +570,7 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     computeAccelerations();
     //  Update velocity with updated acceleration
 
-    #pragma omp parallel for reduction(+ : v[ : N][ : ])
+    #pragma omp parallel for reduction(+ : v[: N][ : ])
 
     for (i = 0; i < N; i++)
     {
