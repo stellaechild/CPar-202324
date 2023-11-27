@@ -1,16 +1,16 @@
 CC = gcc
 SRC = src/
-CFLAGS = -fopenmp -pg -ftree-vectorize -msse4 -mavx -mtune=native -fno-omit-frame-pointer -Ofast -march=native -Wall -Wextra -Wpedantic -Wfatal-errors -Wshadow -Wcast-align -ffast-math -O3 -fno-exceptions -fno-rtti #-O2
+CFLAGS = -fopenmp -pg -ftree-vectorize -msse4 -mavx -mtune=native -fno-omit-frame-pointer -march=native -Wall -Wextra -Wpedantic -Wfatal-errors -Wshadow -Wcast-align -ffast-math -O3 # -fno-exceptions -fno-rtti
 
 .DEFAULT_GOAL = all
 all: MDseq.exe MDpar.exe
 
 MDseq.exe: $(SRC)/MDseq.cpp
-	module load gcc/11.2.0;
+	#module load gcc/11.2.0;
 	$(CC) $(CFLAGS) $(SRC)MDseq.cpp -lm -o MDseq.exe
 
 MDpar.exe: $(SRC)/MDpar.cpp
-	module load gcc/11.2.0;
+	#module load gcc/11.2.0;
 	$(CC) $(CFLAGS) $(SRC)MDpar.cpp -fopenmp -lm -o MDpar.exe
 
 clean:
@@ -22,5 +22,8 @@ runseq:
 runpar:
 	srun --partition=cpar perf stat -M cpi -e cache-misses,instructions,cycles ./MDpar.exe < inputdata.txt
 
-run:
-	./MDpar.exe <inputdata.txt
+test_seq:
+	sudo perf stat -e cycles,instructions ./MDseq.exe < inputdata.txt
+
+test_par:
+	sudo perf stat -e cycles,instructions ./MDpar.exe < inputdata.txt
