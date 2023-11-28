@@ -29,6 +29,9 @@ test_seq:
 test_par:
 	sudo perf stat --cpus-per-task=2  -e cycles,instructions ./MDpar.exe < inputdata.txt
 
+runscript:
+	cd $(SRC) && sbatch ./script.sh
+
 desempenho:
 	srun --partition=cpar perf record ./MDpar.exe < inputdata.txt
 	srun --partition=cpar perf report -n --stdio > perfreport
