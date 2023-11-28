@@ -578,7 +578,6 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
 
     // Elastic walls
 
-
     for (i = 0; i < N; i++)
     {
 

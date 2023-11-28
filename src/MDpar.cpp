@@ -460,21 +460,21 @@ double Kinetic()
     // printf("  Total Kinetic Energy is %f\n",N*mvs*m/2.);
     return kin;
 }
- 
+
 double Potential()
 {
     double Pot = 0.0;
 
-    #pragma omp parallel for num_threads(6)
+#pragma omp parallel for num_threads(6)
     for (int i = 0; i < N; i++)
     {
         double r0i = r[i][0];
         double r1i = r[i][1];
         double r2i = r[i][2];
 
-        #pragma omp parallel sections private(Pot)
+#pragma omp parallel sections private(Pot)
         {
-            #pragma omp section
+#pragma omp section
             {
                 for (int j = 0; j < i; j++)
                 {
@@ -487,7 +487,7 @@ double Potential()
                 }
             }
 
-            #pragma omp section
+#pragma omp section
             {
                 for (int j = i + 1; j < N; j++)
                 {
@@ -512,14 +512,14 @@ void computeAccelerations()
     double rij[3]; // position of i relative to j
     double rij0, rij1, rij2;
     double r0i, r1i, r2i;
-    # pragma omp parallel for num_threads(6)
-    # pragma omp reduction (+:a[:N][:])
+#pragma omp parallel for num_threads(6)
+#pragma omp reduction(+ : a[ : N][ : ])
     for (i = 0; i < N; i++)
     {
         // set all accelerations to zero
         a[i][0] = a[i][1] = a[i][2] = 0;
     }
-    
+
     for (i = 0; i < N - 1; i++)
     {
         double r0i, r1i, r2i;
@@ -593,7 +593,6 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     }
 
     // Elastic walls
-
 
     for (i = 0; i < N; i++)
     {
@@ -677,6 +676,7 @@ void initializeVelocities()
     double vSqdSum, lambda;
     vSqdSum = 0.;
 
+#pragma omp parallel for num_threads(6) reduction(+ : vSqdSum)
     for (i = 0; i < N; i++)
     {
 

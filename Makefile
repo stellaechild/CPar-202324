@@ -23,7 +23,7 @@ runpar:
 	srun --partition=cpar --cpus-per-task=2 perf stat -M cpi -e cache-misses,instructions,cycles ./MDpar.exe < inputdata.txt
 
 test_seq:
-	sudo perf stat --cpus-per-task=2  -e cycles,instructions ./MDseq.exe < inputdata.txt
+	sudo perf stat -e cycles,instructions ./MDseq.exe < inputdata.txt
 
 test_par:
-	sudo perf stat --cpus-per-task=2  -e cycles,instructions ./MDpar.exe < inputdata.txt
+	sudo perf stat -e cycles,instructions ./MDpar.exe < inputdata.txt
