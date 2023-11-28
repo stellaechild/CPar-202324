@@ -57,6 +57,8 @@ double a[MAXPART][3];
 //  Force
 double F[MAXPART][3];
 
+double Pot;
+
 // atom type
 char atype[10];
 //  Function prototypes
@@ -87,7 +89,7 @@ int main()
     int i;
     double dt, Vol, Temp, Press, Pavg, Tavg, rho;
     double VolFac, TempFac, PressFac, timefac;
-    double KE, PE, mvs, gc, Z;
+    double KE, mvs, gc, Z;
     char trash[10000], prefix[1000], tfn[1000], ofn[1000], afn[1000];
     FILE *infp, *tfp, *ofp, *afp;
 
@@ -318,7 +320,6 @@ int main()
         //  We would also like to use the IGL to try to see if we can extract the gas constant
         mvs = MeanSquaredVelocity();
         KE = Kinetic();
-        PE = Potential();
 
         // Temperature from Kinetic Theory
         Temp = m * mvs / (3 * kB) * TempFac;
@@ -332,7 +333,7 @@ int main()
         Tavg += Temp;
         Pavg += Press;
 
-        fprintf(ofp, "  %8.4e  %20.8f  %20.8f %20.8f  %20.8f  %20.8f \n", i * dt * timefac, Temp, Press, KE, PE, KE + PE);
+        fprintf(ofp, "  %8.4e  %20.8f  %20.8f %20.8f  %20.8f  %20.8f \n", i * dt * timefac, Temp, Press, KE, Pot, KE + Pot);
     }
 
     // Because we have calculated the instantaneous temperature and pressure,
@@ -462,42 +463,16 @@ double Kinetic()
     return kin;
 }
 
-// Function to calculate the potential energy of the system
-double Potential()
-{
-    double quot, r2, r0i, r1i, r2i, term1, term2, Pot;
-    int i, j, k;
-
-    Pot = 0.;
-
-    for (i = 0; i < N; i++)
-    {
-        r0i = r[i][0];
-        r1i = r[i][1];
-        r2i = r[i][2];
-
-        for (j = 0; j < N && j != i; j++)
-        {
-            r2 = 0.;
-            r2 += ((r0i - r[j][0]) * (r0i - r[j][0])) + ((r1i - r[j][1]) * (r1i - r[j][1])) + ((r2i - r[j][2]) * (r2i - r[j][2]));
-            quot = sigma / r2;
-            term1 = quot * quot * quot * quot * quot * quot;
-            term2 = quot * quot * quot;
-
-            Pot += 4 * epsilon * (term1 - term2);
-        }
-    }
-
-    return Pot;
-}
 
 void computeAccelerations()
 {
     int i, j, k;
     double f, rSqd;
+    double quot;
     double rij[3]; // position of i relative to j
     double rij0, rij1, rij2;
     double r0i, r1i, r2i;
+    double term1, term2;
 
     for (i = 0; i < N; i++)
     {
@@ -514,8 +489,9 @@ void computeAccelerations()
 
         for (j = i + 1; j < N; j++)
         {
+
             // initialize r^2 to zero
-            rSqd = 0;
+            rSqd = 0.;
             rij0 = r0i - r[j][0];
             rij1 = r1i - r[j][1];
             rij2 = r2i - r[j][2];
@@ -523,10 +499,14 @@ void computeAccelerations()
             rij[1] = rij1;
             rij[2] = rij2;
             rSqd = rij0 * rij0 + rij1 * rij1 + rij2 * rij2;
-
+            quot = sigma/ rSqd;
+            
+            term1 = quot * quot * quot * quot * quot * quot;
+            term2 = quot * quot * quot;
+            Pot += 4 * epsilon * (term1 - term2);
             //  From derivative of Lennard-Jones with sigma and epsilon set equal to 1 in natural units!
-            double rSqd7 = 1 / (rSqd * rSqd * rSqd * rSqd * rSqd * rSqd * rSqd);
-            double rSqd4 = 1 / (rSqd * rSqd * rSqd * rSqd);
+            double rSqd7 = 1. / (rSqd * rSqd * rSqd * rSqd * rSqd * rSqd * rSqd);
+            double rSqd4 = 1. / (rSqd * rSqd * rSqd * rSqd);
             f = 24 * (2 * rSqd7 - rSqd4);
             a[i][0] += rij0 * f;
             a[j][0] -= rij0 * f;
