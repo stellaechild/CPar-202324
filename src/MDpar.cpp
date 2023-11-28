@@ -58,6 +58,8 @@ double a[MAXPART][3];
 //  Force
 double F[MAXPART][3];
 
+double Pot;
+
 // atom type
 char atype[10];
 //  Function prototypes
@@ -88,7 +90,7 @@ int main()
     int i;
     double dt, Vol, Temp, Press, Pavg, Tavg, rho;
     double VolFac, TempFac, PressFac, timefac;
-    double KE, PE, mvs, gc, Z;
+    double KE, mvs, gc, Z;
     char trash[10000], prefix[1000], tfn[1000], ofn[1000], afn[1000];
     FILE *infp, *tfp, *ofp, *afp;
 
@@ -319,7 +321,6 @@ int main()
         //  We would also like to use the IGL to try to see if we can extract the gas constant
         mvs = MeanSquaredVelocity();
         KE = Kinetic();
-        PE = Potential();
 
         // Temperature from Kinetic Theory
         Temp = m * mvs / (3 * kB) * TempFac;
@@ -333,7 +334,7 @@ int main()
         Tavg += Temp;
         Pavg += Press;
 
-        fprintf(ofp, "  %8.4e  %20.8f  %20.8f %20.8f  %20.8f  %20.8f \n", i * dt * timefac, Temp, Press, KE, PE, KE + PE);
+        fprintf(ofp, "  %8.4e  %20.8f  %20.8f %20.8f  %20.8f  %20.8f \n", i * dt * timefac, Temp, Press, KE, Pot, KE + Pot);
     }
 
     // Because we have calculated the instantaneous temperature and pressure,
@@ -460,98 +461,55 @@ double Kinetic()
     // printf("  Total Kinetic Energy is %f\n",N*mvs*m/2.);
     return kin;
 }
- 
-double Potential()
-{
-    double Pot = 0.0;
-
-    #pragma omp parallel for num_threads(6)
-    for (int i = 0; i < N; i++)
-    {
-        double r0i = r[i][0];
-        double r1i = r[i][1];
-        double r2i = r[i][2];
-
-        #pragma omp parallel sections private(Pot)
-        {
-            #pragma omp section
-            {
-                for (int j = 0; j < i; j++)
-                {
-                    double r2 = ((r0i - r[j][0]) * (r0i - r[j][0])) + ((r1i - r[j][1]) * (r1i - r[j][1])) + ((r2i - r[j][2]) * (r2i - r[j][2]));
-                    double quot = sigma / r2;
-                    double term1 = quot * quot * quot * quot * quot * quot;
-                    double term2 = quot * quot * quot;
-
-                    Pot += 4 * epsilon * (term1 - term2);
-                }
-            }
-
-            #pragma omp section
-            {
-                for (int j = i + 1; j < N; j++)
-                {
-                    double r2 = ((r0i - r[j][0]) * (r0i - r[j][0])) + ((r1i - r[j][1]) * (r1i - r[j][1])) + ((r2i - r[j][2]) * (r2i - r[j][2]));
-                    double quot = sigma / r2;
-                    double term1 = quot * quot * quot * quot * quot * quot;
-                    double term2 = quot * quot * quot;
-
-                    Pot += 4 * epsilon * (term1 - term2);
-                }
-            }
-        }
-    }
-
-    return Pot;
-}
 
 void computeAccelerations()
-{
-    int i, j, k;
-    double f, rSqd;
+{   
+    // int i
+    int i, j;
+    double quot, term, termSquared;
+    double f, rSqd, rSqd7, rSqd4;
     double rij[3]; // position of i relative to j
-    double rij0, rij1, rij2;
-    double r0i, r1i, r2i;
-    # pragma omp parallel for num_threads(6)
-    # pragma omp reduction (+:a[:N][:])
-    for (i = 0; i < N; i++)
-    {
-        // set all accelerations to zero
-        a[i][0] = a[i][1] = a[i][2] = 0;
-    }
-    
-    for (i = 0; i < N - 1; i++)
-    {
-        double r0i, r1i, r2i;
-        r0i = r[i][0];
-        r1i = r[i][1];
-        r2i = r[i][2];
-        // loop over all distinct pairs i,j
 
+    Pot = 0.;
+
+    for (i = 0; i < N; i++) {
+        a[i][0] = 0;
+        a[i][1] = 0;
+        a[i][2] = 0;
+    } 
+
+    #pragma omp parallel for reduction(+:Pot) reduction(+:a[:MAXPART][:3]) private(j, rSqd, rSqd4, rSqd7, rij, f) schedule(dynamic, 40)
+    for (i = 0; i < N-1; i++) 
+    {  // set all accelerations to zero
         for (j = i + 1; j < N; j++)
         {
-            // initialize r^2 to zero
-            rSqd = 0;
-            rij0 = r0i - r[j][0];
-            rij1 = r1i - r[j][1];
-            rij2 = r2i - r[j][2];
-            rij[0] = rij0;
-            rij[1] = rij1;
-            rij[2] = rij2;
-            rSqd = rij0 * rij0 + rij1 * rij1 + rij2 * rij2;
+            rSqd = 0.;
+            //  component-by-componenent position of i relative to j
+            rij[0] = r[i][0] - r[j][0];
+            rij[1] = r[i][1] - r[j][1];
+            rij[2] = r[i][2] - r[j][2];
+            //  sum of squares of the components
+            rSqd += rij[0] * rij[0];
+            rSqd += rij[1] * rij[1];
+            rSqd += rij[2] * rij[2];
 
-            //  From derivative of Lennard-Jones with sigma and epsilon set equal to 1 in natural units!
-            double rSqd7 = 1 / (rSqd * rSqd * rSqd * rSqd * rSqd * rSqd * rSqd);
-            double rSqd4 = 1 / (rSqd * rSqd * rSqd * rSqd);
+            quot = sigma / rSqd;
+            term = quot*quot*quot;
+            termSquared = term * term;
+
+            Pot += 4 * epsilon * (termSquared - term);
+            
+            rSqd7 = 1. / (rSqd * rSqd * rSqd * rSqd * rSqd * rSqd * rSqd);
+            rSqd4 = 1. / (rSqd * rSqd * rSqd * rSqd);
+
             f = 24 * (2 * rSqd7 - rSqd4);
-            a[i][0] += rij0 * f;
-            a[j][0] -= rij0 * f;
-
-            a[i][1] += rij1 * f;
-            a[j][1] -= rij1 * f;
-
-            a[i][2] += rij2 * f;
-            a[j][2] -= rij2 * f;
+            //  from F = ma, where m = 1 in natural units!
+            a[i][0] += rij[0] * f;
+            a[j][0] -= rij[0] * f;
+            a[i][1] += rij[1] * f;
+            a[j][1] -= rij[1] * f;
+            a[i][2] += rij[2] * f;
+            a[j][2] -= rij[2] * f;
         }
     }
 }
@@ -559,7 +517,7 @@ void computeAccelerations()
 // returns sum of dv/dt*m/A (aka Pressure) from elastic collisions with walls
 double VelocityVerlet(double dt, int iter, FILE *fp)
 {
-    int i, j, k;
+    int i, j;
 
     double psum = 0.;
 

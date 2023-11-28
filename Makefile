@@ -1,6 +1,6 @@
 CC = gcc
 SRC = src/
-CFLAGS = -fopenmp -pg -ftree-vectorize -msse4 -mavx -mtune=native -fno-omit-frame-pointer -march=native -Wall -Wextra -Wpedantic -Wfatal-errors -Wshadow -Wcast-align -ffast-math -Ofast # -fno-exceptions -fno-rtti
+CFLAGS = -fopenmp -pg -ftree-vectorize -msse4 -mavx -mtune=native -fno-omit-frame-pointer -march=native -Wall -ffast-math -Ofast 
 
 .DEFAULT_GOAL = all
 all: MDseq.exe MDpar.exe
@@ -20,6 +20,7 @@ runseq:
 	srun --partition=cpar --cpus-per-task=2 perf stat -M cpi -e cache-misses,instructions,cycles ./MDseq.exe < inputdata.txt
 
 runpar:
+	export OMP_NUM_THREADS=40;\
 	srun --partition=cpar --cpus-per-task=2 perf stat -M cpi -e cache-misses,instructions,cycles ./MDpar.exe < inputdata.txt
 
 test_seq:
@@ -27,3 +28,7 @@ test_seq:
 
 test_par:
 	sudo perf stat --cpus-per-task=2  -e cycles,instructions ./MDpar.exe < inputdata.txt
+
+desempenho:
+	srun --partition=cpar perf record ./MDpar.exe < inputdata.txt
+	srun --partition=cpar perf report -n --stdio > perfreport
