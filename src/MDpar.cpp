@@ -424,6 +424,7 @@ double MeanSquaredVelocity()
     double vy2 = 0;
     double vz2 = 0;
     double v2;
+
     for (int i = 0; i < N; i++)
     {
 
@@ -444,6 +445,8 @@ double Kinetic()
     double v2, kin;
 
     kin = 0.;
+
+#pragma omp parallel for num_threads(6) private(kin)
     for (int i = 0; i < N; i++)
     {
 
@@ -569,6 +572,7 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     //  Update positions and velocity with current velocity and acceleration
     // printf("  Updated Positions!\n");
 
+#pragma omp parallel for num_threads(6) private(psum)
     for (i = 0; i < N; i++)
     {
 
@@ -629,6 +633,7 @@ void initializeVelocities()
 {
 
     int i, j;
+#pragma omp parallel for num_threads(6)
     for (i = 0; i < N; i++)
     {
 
@@ -689,12 +694,12 @@ void initializeVelocities()
 
     lambda = sqrt(3 * (N - 1) * Tinit / vSqdSum);
 
+#pragma omp parallel for num_threads(6)
     for (i = 0; i < N; i++)
     {
 
         for (j = 0; j < 3; j++)
         {
-
             v[i][j] *= lambda;
         }
     }
