@@ -20,8 +20,10 @@ runseq:
 	srun --partition=cpar --cpus-per-task=2 perf stat -M cpi -e cache-misses,instructions,cycles ./MDseq.exe < inputdata.txt
 
 runpar:
-	export OMP_NUM_THREADS=40; \
-    srun --partition=cpar perf stat -e instructions,cycles,cache-misses,cache-references ./MDpar.exe < inputdata.txt
+	srun --partition=cpar perf stat -e instructions,cycles,cache-misses,cache-references ./MDpar.exe < inputdata.txt
 
 testscript:
 	sbatch $(SRC)script.sh
+
+testseqscript:
+	sbatch $(SRC)test.sh
