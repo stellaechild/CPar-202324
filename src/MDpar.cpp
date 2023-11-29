@@ -464,51 +464,6 @@ double Kinetic()
     return kin;
 }
 
-/*double Potential()
-{
-    double Pot = 0.0;
-
-#pragma omp parallel for num_threads(6)
-    for (int i = 0; i < N; i++)
-    {
-        double r0i = r[i][0];
-        double r1i = r[i][1];
-        double r2i = r[i][2];
-
-#pragma omp parallel sections private(Pot)
-        {
-#pragma omp section
-            {
-                for (int j = 0; j < i; j++)
-                {
-                    double r2 = ((r0i - r[j][0]) * (r0i - r[j][0])) + ((r1i - r[j][1]) * (r1i - r[j][1])) + ((r2i - r[j][2]) * (r2i - r[j][2]));
-                    double quot = sigma / r2;
-                    double term1 = quot * quot * quot * quot * quot * quot;
-                    double term2 = quot * quot * quot;
-
-                    Pot += 4 * epsilon * (term1 - term2);
-                }
-            }
-
-#pragma omp section
-            {
-                for (int j = i + 1; j < N; j++)
-                {
-                    double r2 = ((r0i - r[j][0]) * (r0i - r[j][0])) + ((r1i - r[j][1]) * (r1i - r[j][1])) + ((r2i - r[j][2]) * (r2i - r[j][2]));
-                    double quot = sigma / r2;
-                    double term1 = quot * quot * quot * quot * quot * quot;
-                    double term2 = quot * quot * quot;
-
-                    Pot += 4 * epsilon * (term1 - term2);
-                }
-            }
-        }
-    }
-
-    return Pot;
-}
-*/
-
 void computeAccelerations() {
     int i, j, k;
     double f, rSqd;
