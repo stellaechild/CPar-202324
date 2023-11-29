@@ -653,7 +653,6 @@ void initializeVelocities()
     }
 }
 
-//  Numerical recipes Gaussian distribution number generator
 double gaussdist()
 {
     static bool available = false;
