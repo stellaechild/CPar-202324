@@ -11,7 +11,7 @@ MDseq.exe: $(SRC)/MDseq.cpp
 
 MDpar.exe: $(SRC)/MDpar.cpp
 	#module load gcc/11.2.0;
-	$(CC) $(CFLAGS) $(SRC)MDpar.cpp -fopenmp -lm -o MDpar.exe
+	$(CC) $(CFLAGS) $(SRC)MDpar.cpp -lm -o MDpar.exe
 
 clean:
 	rm ./MD*.exe
