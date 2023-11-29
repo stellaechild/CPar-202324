@@ -57,6 +57,8 @@ double v[MAXPART][3];
 double a[MAXPART][3];
 //  Force
 double F[MAXPART][3];
+// Potential
+double Pot;
 
 // atom type
 char atype[10];
@@ -88,7 +90,7 @@ int main()
     int i;
     double dt, Vol, Temp, Press, Pavg, Tavg, rho;
     double VolFac, TempFac, PressFac, timefac;
-    double KE, PE, mvs, gc, Z;
+    double KE, mvs, gc, Z;
     char trash[10000], prefix[1000], tfn[1000], ofn[1000], afn[1000];
     FILE *infp, *tfp, *ofp, *afp;
 
@@ -319,7 +321,6 @@ int main()
         //  We would also like to use the IGL to try to see if we can extract the gas constant
         mvs = MeanSquaredVelocity();
         KE = Kinetic();
-        PE = Potential();
 
         // Temperature from Kinetic Theory
         Temp = m * mvs / (3 * kB) * TempFac;
@@ -333,7 +334,7 @@ int main()
         Tavg += Temp;
         Pavg += Press;
 
-        fprintf(ofp, "  %8.4e  %20.8f  %20.8f %20.8f  %20.8f  %20.8f \n", i * dt * timefac, Temp, Press, KE, PE, KE + PE);
+        fprintf(ofp, "  %8.4e  %20.8f  %20.8f %20.8f  %20.8f  %20.8f \n", i * dt * timefac, Temp, Press, KE, Pot, KE + Pot);
     }
 
     // Because we have calculated the instantaneous temperature and pressure,
@@ -463,7 +464,7 @@ double Kinetic()
     return kin;
 }
 
-double Potential()
+/*double Potential()
 {
     double Pot = 0.0;
 
@@ -506,9 +507,9 @@ double Potential()
 
     return Pot;
 }
+*/
 
-void computeAccelerations()
-{
+void computeAccelerations() {
     int i, j, k;
     double f, rSqd;
     double rij[3]; // position of i relative to j
@@ -561,7 +562,7 @@ void computeAccelerations()
 // returns sum of dv/dt*m/A (aka Pressure) from elastic collisions with walls
 double VelocityVerlet(double dt, int iter, FILE *fp)
 {
-    int i, j, k;
+    int i, j;
 
     double psum = 0.;
 
