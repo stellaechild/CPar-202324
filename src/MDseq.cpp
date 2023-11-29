@@ -24,6 +24,7 @@
 
  */
 #include <stdio.h>
+#include <omp.h>
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
@@ -43,6 +44,9 @@ double kBSI = 1.38064852e-23; // m^2*kg/(s^2*K)
 //  Size of box, which will be specified in natural units
 double L;
 
+// global variable Potential
+double Pot;
+
 //  Initial Temperature in Natural Units
 double Tinit; // 2;
 //  Vectors!
@@ -56,8 +60,6 @@ double v[MAXPART][3];
 double a[MAXPART][3];
 //  Force
 double F[MAXPART][3];
-
-double Pot;
 
 // atom type
 char atype[10];
@@ -75,8 +77,6 @@ void computeAccelerations();
 double gaussdist();
 //  Initialize velocities according to user-supplied initial Temperature (Tinit)
 void initializeVelocities();
-//  Compute total potential energy from particle coordinates
-double Potential();
 //  Compute mean squared velocity from particle velocities
 double MeanSquaredVelocity();
 //  Compute total kinetic energy from particle mass and velocities
@@ -84,7 +84,6 @@ double Kinetic();
 
 int main()
 {
-
     //  variable delcarations
     int i;
     double dt, Vol, Temp, Press, Pavg, Tavg, rho;
@@ -210,6 +209,7 @@ int main()
 
     scanf("%lf", &rho);
 
+    //N = 10 * 216;
     Vol = N / (rho * NA);
 
     Vol /= VolFac;
@@ -236,9 +236,9 @@ int main()
     }
     // Vol = L*L*L;
     // Length of the box in natural units:
-    L = cbrt(Vol);
-
-    //  Files that we can write different quantities to
+    L = pow(Vol, (1. / 3));
+    // L = cbrt(Vol);
+    //   Files that we can write different quantities to
     tfp = fopen(tfn, "w"); //  The MD trajectory, coordinates of every particle at each timestep
     ofp = fopen(ofn, "w"); //  Output of other quantities (T, P, gc, etc) at every timestep
     afp = fopen(afn, "w"); //  Average T, P, gc, etc from the simulation
@@ -280,7 +280,6 @@ int main()
     int tenp = floor(NumTime / 10);
     fprintf(ofp, "  time (s)              T(t) (K)              P(t) (Pa)           Kinetic En. (n.u.)     Potential En. (n.u.) Total En. (n.u.)\n");
     printf("  PERCENTAGE OF CALCULATION COMPLETE:\n  [");
-
     for (i = 0; i < NumTime + 1; i++)
     {
 
@@ -333,7 +332,7 @@ int main()
         Tavg += Temp;
         Pavg += Press;
 
-        fprintf(ofp, "  %8.4e  %20.8f  %20.8f %20.8f  %20.8f  %20.8f \n", i * dt * timefac, Temp, Press, KE, KE + Pot);
+        fprintf(ofp, "  %8.4e  %20.8f  %20.8f %20.8f  %20.8f  %20.8f \n", i * dt * timefac, Temp, Press, KE, Pot, KE + Pot);
     }
 
     // Because we have calculated the instantaneous temperature and pressure,
@@ -356,7 +355,7 @@ int main()
     printf("\n  THE COMPRESSIBILITY (unitless):          %15.5f \n", Z);
     printf("\n  TOTAL VOLUME (m^3):                      %10.5e \n", Vol * VolFac);
     printf("\n  NUMBER OF PARTICLES (unitless):          %i \n", N);
-
+    
     fclose(tfp);
     fclose(ofp);
     fclose(afp);
@@ -364,6 +363,8 @@ int main()
     return 0;
 }
 
+//  Function prototypes
+//  initialize positions on simple cubic lattice, also calls function to initialize velocities
 void initialize()
 {
     int n, p, i, j, k;
@@ -378,13 +379,10 @@ void initialize()
     //  index for number of particles assigned positions
     p = 0;
     //  initialize positions
-
     for (i = 0; i < n; i++)
     {
-
         for (j = 0; j < n; j++)
         {
-
             for (k = 0; k < n; k++)
             {
                 if (p < N)
@@ -445,12 +443,10 @@ double Kinetic()
     double v2, kin;
 
     kin = 0.;
-
     for (int i = 0; i < N; i++)
     {
 
         v2 = 0.;
-
         for (int j = 0; j < 3; j++)
         {
 
@@ -463,6 +459,11 @@ double Kinetic()
     return kin;
 }
 
+
+// aqui
+//   Uses the derivative of the Lennard-Jones potential to calculate
+//   the forces on each atom.  Then uses a = F/m to calculate the
+//   accelleration of each atom.
 void computeAccelerations()
 {   
     // int i
@@ -479,10 +480,8 @@ void computeAccelerations()
         a[i][2] = 0;
     } 
 
-    #pragma omp parallel for reduction(+:Pot) private(j, rSqd, rSqd4, rSqd7, rij, f) schedule(dynamic, 40)
     for (i = 0; i < N-1; i++) 
     {  // set all accelerations to zero
-        #pragma omp reduction(+:a[:MAXPART][:3])
         for (j = i + 1; j < N; j++)
         {
             rSqd = 0.;
@@ -588,7 +587,6 @@ void initializeVelocities()
 {
 
     int i, j;
-
     for (i = 0; i < N; i++)
     {
 
@@ -605,7 +603,6 @@ void initializeVelocities()
 
     for (i = 0; i < N; i++)
     {
-
         for (j = 0; j < 3; j++)
         {
 
@@ -620,10 +617,8 @@ void initializeVelocities()
     //  velocity of each particle... effectively set the
     //  center of mass velocity to zero so that the system does
     //  not drift in space!
-
     for (i = 0; i < N; i++)
     {
-
         for (j = 0; j < 3; j++)
         {
 
@@ -635,10 +630,8 @@ void initializeVelocities()
     //  by a factor which is consistent with our initial temperature, Tinit
     double vSqdSum, lambda;
     vSqdSum = 0.;
-
     for (i = 0; i < N; i++)
     {
-
         for (j = 0; j < 3; j++)
         {
 
@@ -650,7 +643,6 @@ void initializeVelocities()
 
     for (i = 0; i < N; i++)
     {
-
         for (j = 0; j < 3; j++)
         {
 
