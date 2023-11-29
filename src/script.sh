@@ -13,5 +13,5 @@ for nthreads in "${threads[@]}"
 do
     export OMP_NUM_THREADS=${nthreads}
     echo ${OMP_NUM_THREADS}
-    time `./MDpar.exe <inputdata.txt >resultados`
+    time `./MDpar.exe <inputdata.txt >lixo`
 done
