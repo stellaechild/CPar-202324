@@ -464,54 +464,49 @@ double Kinetic()
     return kin;
 }
 
-void computeAccelerations() {
-    int i, j, k;
-    double f, rSqd;
+void computeAccelerations()
+{
+    int i, j;
+    double f, rSqd, rSqd7, rSqd4;
     double rij[3]; // position of i relative to j
     double rij0, rij1, rij2;
-    double r0i, r1i, r2i;
-#pragma omp parallel for num_threads(6)
-#pragma omp reduction(+ : a[ : N][ : ])
+
+    double private_acc[N][3] = {{0.0}}; // Private accumulators for each thread
+
+#pragma omp parallel for num_threads(6) private(i, j, rij0, rij1, rij2, rSqd, rSqd7, rSqd4, f)
     for (i = 0; i < N; i++)
     {
-        // set all accelerations to zero
-        a[i][0] = a[i][1] = a[i][2] = 0;
-    }
-
-    for (i = 0; i < N - 1; i++)
-    {
-        double r0i, r1i, r2i;
-        r0i = r[i][0];
-        r1i = r[i][1];
-        r2i = r[i][2];
-        // loop over all distinct pairs i,j
-
         for (j = i + 1; j < N; j++)
         {
-            // initialize r^2 to zero
-            rSqd = 0;
-            rij0 = r0i - r[j][0];
-            rij1 = r1i - r[j][1];
-            rij2 = r2i - r[j][2];
-            rij[0] = rij0;
-            rij[1] = rij1;
-            rij[2] = rij2;
+            // Calculate rij, rSqd, and f
+            rij0 = r[i][0] - r[j][0];
+            rij1 = r[i][1] - r[j][1];
+            rij2 = r[i][2] - r[j][2];
             rSqd = rij0 * rij0 + rij1 * rij1 + rij2 * rij2;
 
-            //  From derivative of Lennard-Jones with sigma and epsilon set equal to 1 in natural units!
-            double rSqd7 = 1 / (rSqd * rSqd * rSqd * rSqd * rSqd * rSqd * rSqd);
-            double rSqd4 = 1 / (rSqd * rSqd * rSqd * rSqd);
+            rSqd7 = 1 / (rSqd * rSqd * rSqd * rSqd * rSqd * rSqd * rSqd);
+            rSqd4 = 1 / (rSqd * rSqd * rSqd * rSqd);
             f = 24 * (2 * rSqd7 - rSqd4);
-            a[i][0] += rij0 * f;
-            a[j][0] -= rij0 * f;
 
-            a[i][1] += rij1 * f;
-            a[j][1] -= rij1 * f;
+            // Accumulate forces in private accumulators
+            private_acc[i][0] += rij0 * f;
+            private_acc[i][1] += rij1 * f;
+            private_acc[i][2] += rij2 * f;
 
-            a[i][2] += rij2 * f;
-            a[j][2] -= rij2 * f;
+            // Subtract the same from j to make the force pairs cancel out
+            private_acc[j][0] -= rij0 * f;
+            private_acc[j][1] -= rij1 * f;
+            private_acc[j][2] -= rij2 * f;
         }
     }
+
+    // Update a using the private accumulators
+#pragma omp critical
+        {
+            a[i][0] += private_acc[i][0];
+            a[i][1] += private_acc[i][1];
+            a[i][2] += private_acc[i][2];
+        }
 }
 
 // returns sum of dv/dt*m/A (aka Pressure) from elastic collisions with walls
