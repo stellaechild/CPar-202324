@@ -24,10 +24,10 @@
 
  */
 #include <stdio.h>
+#include <omp.h>
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#include <omp.h>
 
 // Number of particles
 int N = 5000;
@@ -43,6 +43,9 @@ double kBSI = 1.38064852e-23; // m^2*kg/(s^2*K)
 
 //  Size of box, which will be specified in natural units
 double L;
+
+// global variable Potential
+double Pot;
 
 //  Initial Temperature in Natural Units
 double Tinit; // 2;
@@ -74,8 +77,6 @@ void computeAccelerations();
 double gaussdist();
 //  Initialize velocities according to user-supplied initial Temperature (Tinit)
 void initializeVelocities();
-//  Compute total potential energy from particle coordinates
-double Potential();
 //  Compute mean squared velocity from particle velocities
 double MeanSquaredVelocity();
 //  Compute total kinetic energy from particle mass and velocities
@@ -83,12 +84,11 @@ double Kinetic();
 
 int main()
 {
-
     //  variable delcarations
     int i;
     double dt, Vol, Temp, Press, Pavg, Tavg, rho;
     double VolFac, TempFac, PressFac, timefac;
-    double KE, PE, mvs, gc, Z;
+    double KE, mvs, gc, Z;
     char trash[10000], prefix[1000], tfn[1000], ofn[1000], afn[1000];
     FILE *infp, *tfp, *ofp, *afp;
 
@@ -209,6 +209,7 @@ int main()
 
     scanf("%lf", &rho);
 
+    //N = 10 * 216;
     Vol = N / (rho * NA);
 
     Vol /= VolFac;
@@ -235,9 +236,9 @@ int main()
     }
     // Vol = L*L*L;
     // Length of the box in natural units:
-    L = cbrt(Vol);
-
-    //  Files that we can write different quantities to
+    L = pow(Vol, (1. / 3));
+    // L = cbrt(Vol);
+    //   Files that we can write different quantities to
     tfp = fopen(tfn, "w"); //  The MD trajectory, coordinates of every particle at each timestep
     ofp = fopen(ofn, "w"); //  Output of other quantities (T, P, gc, etc) at every timestep
     afp = fopen(afn, "w"); //  Average T, P, gc, etc from the simulation
@@ -279,7 +280,6 @@ int main()
     int tenp = floor(NumTime / 10);
     fprintf(ofp, "  time (s)              T(t) (K)              P(t) (Pa)           Kinetic En. (n.u.)     Potential En. (n.u.) Total En. (n.u.)\n");
     printf("  PERCENTAGE OF CALCULATION COMPLETE:\n  [");
-
     for (i = 0; i < NumTime + 1; i++)
     {
 
@@ -319,7 +319,6 @@ int main()
         //  We would also like to use the IGL to try to see if we can extract the gas constant
         mvs = MeanSquaredVelocity();
         KE = Kinetic();
-        PE = Potential();
 
         // Temperature from Kinetic Theory
         Temp = m * mvs / (3 * kB) * TempFac;
@@ -333,7 +332,7 @@ int main()
         Tavg += Temp;
         Pavg += Press;
 
-        fprintf(ofp, "  %8.4e  %20.8f  %20.8f %20.8f  %20.8f  %20.8f \n", i * dt * timefac, Temp, Press, KE, PE, KE + PE);
+        fprintf(ofp, "  %8.4e  %20.8f  %20.8f %20.8f  %20.8f  %20.8f \n", i * dt * timefac, Temp, Press, KE, Pot, KE + Pot);
     }
 
     // Because we have calculated the instantaneous temperature and pressure,
@@ -356,7 +355,7 @@ int main()
     printf("\n  THE COMPRESSIBILITY (unitless):          %15.5f \n", Z);
     printf("\n  TOTAL VOLUME (m^3):                      %10.5e \n", Vol * VolFac);
     printf("\n  NUMBER OF PARTICLES (unitless):          %i \n", N);
-
+    
     fclose(tfp);
     fclose(ofp);
     fclose(afp);
@@ -364,6 +363,8 @@ int main()
     return 0;
 }
 
+//  Function prototypes
+//  initialize positions on simple cubic lattice, also calls function to initialize velocities
 void initialize()
 {
     int n, p, i, j, k;
@@ -378,13 +379,10 @@ void initialize()
     //  index for number of particles assigned positions
     p = 0;
     //  initialize positions
-
     for (i = 0; i < n; i++)
     {
-
         for (j = 0; j < n; j++)
         {
-
             for (k = 0; k < n; k++)
             {
                 if (p < N)
@@ -424,6 +422,7 @@ double MeanSquaredVelocity()
     double vy2 = 0;
     double vz2 = 0;
     double v2;
+
     for (int i = 0; i < N; i++)
     {
 
@@ -448,7 +447,6 @@ double Kinetic()
     {
 
         v2 = 0.;
-
         for (int j = 0; j < 3; j++)
         {
 
@@ -460,98 +458,61 @@ double Kinetic()
     // printf("  Total Kinetic Energy is %f\n",N*mvs*m/2.);
     return kin;
 }
- 
-double Potential()
-{
-    double Pot = 0.0;
 
-    #pragma omp parallel for num_threads(6)
-    for (int i = 0; i < N; i++)
-    {
-        double r0i = r[i][0];
-        double r1i = r[i][1];
-        double r2i = r[i][2];
 
-        #pragma omp parallel sections private(Pot)
-        {
-            #pragma omp section
-            {
-                for (int j = 0; j < i; j++)
-                {
-                    double r2 = ((r0i - r[j][0]) * (r0i - r[j][0])) + ((r1i - r[j][1]) * (r1i - r[j][1])) + ((r2i - r[j][2]) * (r2i - r[j][2]));
-                    double quot = sigma / r2;
-                    double term1 = quot * quot * quot * quot * quot * quot;
-                    double term2 = quot * quot * quot;
-
-                    Pot += 4 * epsilon * (term1 - term2);
-                }
-            }
-
-            #pragma omp section
-            {
-                for (int j = i + 1; j < N; j++)
-                {
-                    double r2 = ((r0i - r[j][0]) * (r0i - r[j][0])) + ((r1i - r[j][1]) * (r1i - r[j][1])) + ((r2i - r[j][2]) * (r2i - r[j][2]));
-                    double quot = sigma / r2;
-                    double term1 = quot * quot * quot * quot * quot * quot;
-                    double term2 = quot * quot * quot;
-
-                    Pot += 4 * epsilon * (term1 - term2);
-                }
-            }
-        }
-    }
-
-    return Pot;
-}
-
+// aqui
+//   Uses the derivative of the Lennard-Jones potential to calculate
+//   the forces on each atom.  Then uses a = F/m to calculate the
+//   accelleration of each atom.
 void computeAccelerations()
-{
-    int i, j, k;
-    double f, rSqd;
+{   
+    // int i
+    int i, j;
+    double quot, term, termSquared;
+    double f, rSqd, rSqd7, rSqd4;
     double rij[3]; // position of i relative to j
-    double rij0, rij1, rij2;
-    double r0i, r1i, r2i;
-    # pragma omp parallel for num_threads(6)
-    # pragma omp reduction (+:a[:N][:])
-    for (i = 0; i < N; i++)
-    {
-        // set all accelerations to zero
-        a[i][0] = a[i][1] = a[i][2] = 0;
-    }
-    
-    for (i = 0; i < N - 1; i++)
-    {
-        double r0i, r1i, r2i;
-        r0i = r[i][0];
-        r1i = r[i][1];
-        r2i = r[i][2];
-        // loop over all distinct pairs i,j
 
+    Pot = 0.;
+
+    for (i = 0; i < N; i++) {
+        a[i][0] = 0;
+        a[i][1] = 0;
+        a[i][2] = 0;
+    } 
+
+    #pragma omp parallel for reduction(+:Pot) private(j, rSqd, rSqd4, rSqd7, rij, f) schedule(dynamic, 40)
+    for (i = 0; i < N-1; i++) 
+    {  // set all accelerations to zero
+        #pragma omp reduction(+:a[:MAXPART][:3])
         for (j = i + 1; j < N; j++)
         {
-            // initialize r^2 to zero
-            rSqd = 0;
-            rij0 = r0i - r[j][0];
-            rij1 = r1i - r[j][1];
-            rij2 = r2i - r[j][2];
-            rij[0] = rij0;
-            rij[1] = rij1;
-            rij[2] = rij2;
-            rSqd = rij0 * rij0 + rij1 * rij1 + rij2 * rij2;
+            rSqd = 0.;
+            //  component-by-componenent position of i relative to j
+            rij[0] = r[i][0] - r[j][0];
+            rij[1] = r[i][1] - r[j][1];
+            rij[2] = r[i][2] - r[j][2];
+            //  sum of squares of the components
+            rSqd += rij[0] * rij[0];
+            rSqd += rij[1] * rij[1];
+            rSqd += rij[2] * rij[2];
 
-            //  From derivative of Lennard-Jones with sigma and epsilon set equal to 1 in natural units!
-            double rSqd7 = 1 / (rSqd * rSqd * rSqd * rSqd * rSqd * rSqd * rSqd);
-            double rSqd4 = 1 / (rSqd * rSqd * rSqd * rSqd);
+            quot = sigma / rSqd;
+            term = quot*quot*quot;
+            termSquared = term * term;
+
+            Pot += 4 * epsilon * (termSquared - term);
+            
+            rSqd7 = 1. / (rSqd * rSqd * rSqd * rSqd * rSqd * rSqd * rSqd);
+            rSqd4 = 1. / (rSqd * rSqd * rSqd * rSqd);
+
             f = 24 * (2 * rSqd7 - rSqd4);
-            a[i][0] += rij0 * f;
-            a[j][0] -= rij0 * f;
-
-            a[i][1] += rij1 * f;
-            a[j][1] -= rij1 * f;
-
-            a[i][2] += rij2 * f;
-            a[j][2] -= rij2 * f;
+            //  from F = ma, where m = 1 in natural units!
+            a[i][0] += rij[0] * f;
+            a[j][0] -= rij[0] * f;
+            a[i][1] += rij[1] * f;
+            a[j][1] -= rij[1] * f;
+            a[i][2] += rij[2] * f;
+            a[j][2] -= rij[2] * f;
         }
     }
 }
@@ -559,8 +520,9 @@ void computeAccelerations()
 // returns sum of dv/dt*m/A (aka Pressure) from elastic collisions with walls
 double VelocityVerlet(double dt, int iter, FILE *fp)
 {
-    int i, j, k;
+    int i, j;
 
+    double half_dt = 0.5 * dt;
     double psum = 0.;
 
     //  Compute accelerations from forces at current position
@@ -568,36 +530,33 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     // computeAccelerations();
     //  Update positions and velocity with current velocity and acceleration
     // printf("  Updated Positions!\n");
-
     for (i = 0; i < N; i++)
     {
+        // Update the position and velocity components for particle i
+        r[i][0] += v[i][0] * dt + half_dt * a[i][0] * dt;
+        r[i][1] += v[i][1] * dt + half_dt * a[i][1] * dt;
+        r[i][2] += v[i][2] * dt + half_dt * a[i][2] * dt;
 
-        for (j = 0; j < 3; j++)
-        {
-            r[i][j] += v[i][j] * dt + 0.5 * a[i][j] * dt * dt;
+        v[i][0] += half_dt * a[i][0];
+        v[i][1] += half_dt * a[i][1];
+        v[i][2] += half_dt * a[i][2];
 
-            v[i][j] += 0.5 * a[i][j] * dt;
-        }
         // printf("  %i  %6.4e   %6.4e   %6.4e\n",i,r[i][0],r[i][1],r[i][2]);
     }
     //  Update accellerations from updated positions
     computeAccelerations();
     //  Update velocity with updated acceleration
-
     for (i = 0; i < N; i++)
     {
-        for (j = 0; j < 3; j++)
-        {
-            v[i][j] += 0.5 * a[i][j] * dt;
-        }
+        // mudei
+        v[i][0] += half_dt * a[i][0];
+        v[i][1] += half_dt * a[i][1];
+        v[i][2] += half_dt * a[i][2];
     }
 
     // Elastic walls
-
-
     for (i = 0; i < N; i++)
     {
-
         for (j = 0; j < 3; j++)
         {
             if (r[i][j] < 0.)
@@ -646,7 +605,6 @@ void initializeVelocities()
 
     for (i = 0; i < N; i++)
     {
-
         for (j = 0; j < 3; j++)
         {
 
@@ -661,10 +619,8 @@ void initializeVelocities()
     //  velocity of each particle... effectively set the
     //  center of mass velocity to zero so that the system does
     //  not drift in space!
-
     for (i = 0; i < N; i++)
     {
-
         for (j = 0; j < 3; j++)
         {
 
@@ -676,10 +632,8 @@ void initializeVelocities()
     //  by a factor which is consistent with our initial temperature, Tinit
     double vSqdSum, lambda;
     vSqdSum = 0.;
-
     for (i = 0; i < N; i++)
     {
-
         for (j = 0; j < 3; j++)
         {
 
@@ -691,7 +645,6 @@ void initializeVelocities()
 
     for (i = 0; i < N; i++)
     {
-
         for (j = 0; j < 3; j++)
         {
 
