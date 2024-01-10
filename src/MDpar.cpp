@@ -26,7 +26,7 @@
 #include <stdio.h>
 #include <omp.h>
 #include <stdlib.h>
-#include <math.h>
+#include <cmath>
 #include <string.h>
 
 // Number of particles

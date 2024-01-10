@@ -16,9 +16,9 @@ MDpar.exe: $(SRC)/MDpar.cpp
 	$(GCC) $(GCC_CFLAGS) $(SRC)MDpar.cpp -lm -o MDpar.exe
 
 MDcuda.exe: $(SRC)/MDcuda.cu
+	module load gcc/7.2.0; \
 	module load cuda/11.3.1; \
 	$(CUDA) $(CUDA_FLAGS) $(SRC)MDcuda.cu -o MDcuda.exe
-	
 	
 clean:
 	rm ./MD*.exe
@@ -29,7 +29,8 @@ runseq:
 runpar:
 	srun --partition=cpar perf stat -e instructions,cycles,cache-misses,cache-references ./MDpar.exe < inputdata.txt
 
-#runcuda:
+runcuda:
+	srun --partition=cpar -e instructions,cyclesm,cache_misses,cache-references ./MDcuda.exe < inputdata.txt
 
 test_seq_script:
 	sbatch $(SRC)MDseq.sh
@@ -38,4 +39,4 @@ test_par_script:
 	sbatch $(SRC)MDpar.sh
 
 test_cuda_script:
-	sbatch $(SRC)MDcuda.sh<
+	sbatch $(SRC)MDcuda.sh

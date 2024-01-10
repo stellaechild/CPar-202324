@@ -1,9 +1,7 @@
 #!/bin/bash
-#SBATCH --ntasks=40
-#SBATCH --nodes=2
-#SBATCH --time=00:10:00
+#SBATCH --time=1:00
 #SBATCH --partition=cpar
-#SBATCH --exclusive
+#SBATCH --constraint=k20
 
 
 threads=(4 6 8 10 12 14 18 24 30 32 34 38 40)

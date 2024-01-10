@@ -390,7 +390,7 @@ __device__ double atomicAddDouble(double *address, double val)
     return __longlong_as_double(old);
 }
 
-// Function to perform atomic subtraction for doubles
+// Function to perform atomic addition for doubles
 __device__ double atomicSubDouble(double *address, double val)
 {
     unsigned long long int *address_as_ull = (unsigned long long int *)address;
@@ -404,6 +404,7 @@ __device__ double atomicSubDouble(double *address, double val)
 
     return __longlong_as_double(old);
 }
+
 
 //  Function prototypes
 //  initialize positions on simple cubic lattice, also calls function to initialize velocities
@@ -500,13 +501,13 @@ void computeAccelerations()
     cudaMalloc((void **)&d_epsilon, sizeof(double));
 
     cudaMemcpy(d_r, r, sizeof(double) * MAXPART * 3, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_a, a, sizeof(double) * MAXPART * 3, cudaMemcpyHostToDevice);
+    cudaMemset(d_a, 0, N * 3 * sizeof(double));
 
     cudaMemcpy(d_Pot, &Pot, sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(d_sigma, &sigma, sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(d_epsilon, &epsilon, sizeof(double), cudaMemcpyHostToDevice);
 
-    int threadsPerBlock = 128;
+    int threadsPerBlock = 256;
     int blocksPerGrid = (MAXPART + threadsPerBlock - 1) / threadsPerBlock;
 
     computeAccelerationsCUDA<<<blocksPerGrid, threadsPerBlock>>>(d_r, d_a, d_Pot, d_sigma, d_epsilon);
@@ -644,7 +645,7 @@ void Kinetic()
     cudaMemcpy(d_m, &m, sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(d_KE, &KE, sizeof(double), cudaMemcpyHostToDevice);
 
-    int threadsPerBlock = 128;
+    int threadsPerBlock = 256;
     int blocksPerGrid = (MAXPART + threadsPerBlock - 1) / threadsPerBlock;
 
     KineticCUDA<<<blocksPerGrid, threadsPerBlock>>>(d_v, d_m, d_KE);
