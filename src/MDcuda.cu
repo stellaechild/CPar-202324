@@ -23,6 +23,10 @@
  Wayne NJ 07470
 
  */
+#include <cuda_runtime.h>
+#include "device_launch_parameters.h"
+#include <cuda.h>
+#include "cuda_runtime.h"
 #include <stdio.h>
 #include <omp.h>
 #include <stdlib.h>
@@ -30,7 +34,7 @@
 #include <string.h>
 
 // Number of particles
-int N = 5000;
+#define N 5000
 
 //  Lennard-Jones parameters in natural units!
 double sigma = 1.;
@@ -51,6 +55,7 @@ double Pot;
 double Tinit; // 2;
 //  Vectors!
 //
+
 const int MAXPART = 5001;
 //  Position
 double r[MAXPART][3];
@@ -60,6 +65,12 @@ double v[MAXPART][3];
 double a[MAXPART][3];
 //  Force
 double F[MAXPART][3];
+
+// Mean Velocity Squared
+double mvs = 0;
+
+// Kinetic Energy
+double KE = 0;
 
 // atom type
 char atype[10];
@@ -78,17 +89,18 @@ double gaussdist();
 //  Initialize velocities according to user-supplied initial Temperature (Tinit)
 void initializeVelocities();
 //  Compute mean squared velocity from particle velocities
-double MeanSquaredVelocity();
+void MeanSquaredVelocity();
 //  Compute total kinetic energy from particle mass and velocities
-double Kinetic();
+void Kinetic();
 
 int main()
 {
+
     //  variable delcarations
     int i;
     double dt, Vol, Temp, Press, Pavg, Tavg, rho;
     double VolFac, TempFac, PressFac, timefac;
-    double KE, mvs, gc, Z;
+    double KE, gc, Z;
     char trash[10000], prefix[1000], tfn[1000], ofn[1000], afn[1000];
     FILE *infp, *tfp, *ofp, *afp;
 
@@ -317,8 +329,8 @@ int main()
         //  Instantaneous mean velocity squared, Temperature, Pressure
         //  Potential, and Kinetic Energy
         //  We would also like to use the IGL to try to see if we can extract the gas constant
-        mvs = MeanSquaredVelocity();
-        KE = Kinetic();
+        MeanSquaredVelocity();
+        Kinetic();
 
         // Temperature from Kinetic Theory
         Temp = m * mvs / (3 * kB) * TempFac;
@@ -414,105 +426,87 @@ void initialize()
      */
 }
 
-//  Function to calculate the averaged velocity squared
-double MeanSquaredVelocity()
-{
-
-    double vx2 = 0;
-    double vy2 = 0;
-    double vz2 = 0;
-    double v2;
-
-    for (int i = 0; i < N; i++)
-    {
-
-        vx2 = vx2 + v[i][0] * v[i][0];
-        vy2 = vy2 + v[i][1] * v[i][1];
-        vz2 = vz2 + v[i][2] * v[i][2];
-    }
-    v2 = (vx2 + vy2 + vz2) / N;
-
-    // printf("  Average of x-component of velocity squared is %f\n",v2);
-    return v2;
-}
-
-//  Function to calculate the kinetic energy of the system
-double Kinetic()
-{ // Write Function here!
-
-    double v2, kin;
-
-    kin = 0.;
-    for (int i = 0; i < N; i++)
-    {
-
-        v2 = 0.;
-        for (int j = 0; j < 3; j++)
-        {
-
-            v2 += v[i][j] * v[i][j];
-        }
-        kin += m * v2 / 2.;
-    }
-
-    // printf("  Total Kinetic Energy is %f\n",N*mvs*m/2.);
-    return kin;
-}
-
-// aqui
-//   Uses the derivative of the Lennard-Jones potential to calculate
-//   the forces on each atom.  Then uses a = F/m to calculate the
-//   accelleration of each atom.
 void computeAccelerations()
 {
-    // int i
-    int i, j;
+    double(**d_r), (**d_a);
+    double *d_Pot, *d_sigma, *d_epsilon;
+
+    cudaMalloc((void **)&d_r, sizeof(double[MAXPART][3]));
+    cudaMalloc((void **)&d_a, sizeof(double[MAXPART][3]));
+
+    cudaMalloc((void **)&d_Pot, sizeof(double));
+    cudaMalloc((void **)&d_sigma, sizeof(double));
+    cudaMalloc((void **)&d_epsilon, sizeof(double));
+
+    cudaMemcpy(d_r, r, sizeof(double[MAXPART][3]), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a, a, sizeof(double[MAXPART][3]), cudaMemcpyHostToDevice);
+
+    cudaMemcpy(d_Pot, &Pot, sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_sigma, &sigma, sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_epsilon, &epsilon, sizeof(double), cudaMemcpyHostToDevice);
+
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+
+    computeAccelerationsCUDA<<<blocksPerGrid, threadsPerBlock>>>(d_r, d_a, d_Pot, d_sigma, d_epsilon);
+    // cudaDeviceSynchronize(); Este comando pode vir a ser precisa, caso os resultados estejam errados.
+
+    cudaMemcpy(a, d_a, sizeof(double[MAXPART][3]), cudaMemcpyDeviceToHost);
+
+    cudaMemcpy(&Pot, d_Pot, sizeof(double), cudaMemcpyDeviceToHost);
+
+    cudaFree(d_r);
+    cudaFree(d_a);
+    cudaFree(d_Pot);
+    cudaFree(d_sigma);
+    cudaFree(d_epsilon);
+}
+
+// CUDA kernel for computing forces and accelerations
+__global__ void computeAccelerationsCUDA(double **r_device, double **a_device, double *Pot_device, double *sigma_device, double *epsilon_device)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j;
     double quot, term, termSquared;
     double f, rSqd, rSqd7, rSqd4;
     double rij[3]; // position of i relative to j
 
-    Pot = 0.;
-
-    for (i = 0; i < N; i++)
+    if (i < N - 1)
     {
-        a[i][0] = 0;
-        a[i][1] = 0;
-        a[i][2] = 0;
-    }
+        a_device[i][0] = 0;
+        a_device[i][1] = 0;
+        a_device[i][2] = 0;
 
-#pragma omp parallel for reduction(+ : Pot) private(j, rSqd, rSqd4, rSqd7, rij, f) schedule(dynamic, 40)
-    for (i = 0; i < N - 1; i++)
-    { // set all accelerations to zero
-#pragma omp reduction(+ : a[ : MAXPART][ : 3])
-        for (j = i + 1; j < N; j++)
+        for (int j = i + 1; j < N; j++)
         {
-            rSqd = 0.;
-            //  component-by-componenent position of i relative to j
-            rij[0] = r[i][0] - r[j][0];
-            rij[1] = r[i][1] - r[j][1];
-            rij[2] = r[i][2] - r[j][2];
-            //  sum of squares of the components
+            double rij[3];
+            double rSqd = 0.0;
+
+            rij[0] = r_device[i * 3] - r_device[j * 3];
+            rij[1] = r_device[i * 3 + 1] - r_device[j * 3 + 1];
+            rij[2] = r_device[i * 3 + 2] - r_device[j * 3 + 2];
+
             rSqd += rij[0] * rij[0];
             rSqd += rij[1] * rij[1];
             rSqd += rij[2] * rij[2];
 
-            quot = sigma / rSqd;
-            term = quot * quot * quot;
-            termSquared = term * term;
+            double quot = (*sigma_device) / rSqd;
+            double term = quot * quot * quot;
+            double termSquared = term * term;
 
-            Pot += 4 * epsilon * (termSquared - term);
+            atomicAddDouble(Pot_device, 4.0 * (*epsilon_device) * (termSquared - term));
 
-            rSqd7 = 1. / (rSqd * rSqd * rSqd * rSqd * rSqd * rSqd * rSqd);
-            rSqd4 = 1. / (rSqd * rSqd * rSqd * rSqd);
+            double rSqd7 = 1.0 / (rSqd * rSqd * rSqd * rSqd * rSqd * rSqd * rSqd);
+            double rSqd4 = 1.0 / (rSqd * rSqd * rSqd * rSqd);
 
-            f = 24 * (2 * rSqd7 - rSqd4);
-            //  from F = ma, where m = 1 in natural units!
-            a[i][0] += rij[0] * f;
-            a[j][0] -= rij[0] * f;
-            a[i][1] += rij[1] * f;
-            a[j][1] -= rij[1] * f;
-            a[i][2] += rij[2] * f;
-            a[j][2] -= rij[2] * f;
+            double f = 24.0 * (2 * rSqd7 - rSqd4);
+
+            atomicAddDouble(&(a_device[i][0]), rij[0] * f);
+            atomicSubDouble(&(a_device[j][0]), rij[0] * f);
+            atomicAddDouble(&(a_device[i][1]), rij[1] * f);
+            atomicSubDouble(&(a_device[j][1]), rij[1] * f);
+            atomicAddDouble(&(a_device[i][2]), rij[2] * f);
+            atomicSubDouble(&(a_device[j][2]), rij[2] * f);
         }
     }
 }
@@ -583,6 +577,94 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     // fprintf(fp,"\n \n");
 
     return psum / (6 * L * L);
+}
+
+void MeanSquaredVelocity()
+{
+    double(**d_v);
+    double *d_mvs;
+
+    cudaMalloc((void **)&d_v, sizeof(double[MAXPART][3]));
+    cudaMalloc((void **)&d_mvs, sizeof(double));
+
+    cudaMemcpy(d_v, v, sizeof(double[MAXPART][3]), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_mvs, &mvs, sizeof(double), cudaMemcpyHostToDevice);
+
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+
+    MeanSquaredVelocityCUDA<<<blocksPerGrid, threadsPerBlock>>>(d_v, d_mvs);
+    // cudaDeviceSynchronize(); Este comando pode vir a ser precisa, caso os resultados estejam errados.
+
+    cudaMemcpy(v, d_v, sizeof(double[MAXPART][3]), cudaMemcpyDeviceToHost);
+
+    cudaMemcpy(&mvs, d_mvs, sizeof(double[MAXPART][3]), cudaMemcpyDeviceToHost);
+
+    cudaFree(d_v);
+    cudaFree(d_mvs);
+}
+
+__global__ void MeanSquaredVelocityCUDA(double **v, double *result)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    double vx2 = 0;
+    double vy2 = 0;
+    double vz2 = 0;
+
+    if (idx < N)
+    {
+        vx2 = vx2 + v[idx][0] * v[idx][0];
+        vy2 = vy2 + v[idx][1] * v[idx][1];
+        vz2 = vz2 + v[idx][2] * v[idx][2];
+    }
+
+    atomicAddDouble(result, ((vx2 + vy2 + vz2) / N));
+}
+
+void Kinetic()
+{
+    double(**d_v);
+    double *d_m;
+    double *d_KE;
+
+    cudaMalloc((void **)&d_v, sizeof(double[MAXPART][3]));
+
+    cudaMalloc((void **)&d_m, sizeof(double));
+    cudaMalloc((void **)&d_KE, sizeof(double));
+
+    cudaMemcpy(d_v, v, sizeof(double[MAXPART][3]), cudaMemcpyHostToDevice);
+
+    cudaMemcpy(d_m, &m, sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_KE, &KE, sizeof(double), cudaMemcpyHostToDevice);
+
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+
+    KineticCUDA<<<blocksPerGrid, threadsPerBlock>>>(d_v, d_m, d_KE);
+
+    cudaMemcpy(v, d_v, sizeof(double[MAXPART][3]), cudaMemcpyDeviceToHost);
+
+    cudaMemcpy(&d_KE, &KE, sizeof(double), cudaMemcpyDeviceToHost);
+
+    cudaFree(d_v);
+    cudaFree(d_m);
+    cudaFree(d_KE);
+}
+
+__global__ void KineticCUDA(double **d_v, double *d_m, double *d_KE)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    double v2;
+
+    if (idx < N)
+    {
+        v2 = 0.;
+        v2 += v[idx][0] * v[idx][0];
+        v2 += v[idx][1] * v[idx][1];
+        v2 += v[idx][2] * v[idx][2];
+        atomicAddDouble(d_KE, ((*d_m) * v2 / 2.0));
+    }
 }
 
 void initializeVelocities()
@@ -679,4 +761,34 @@ double gaussdist()
         available = false;
         return gset;
     }
+}
+
+// Function to perform atomic addition for doubles
+__device__ double atomicAddDouble(double *address, double val)
+{
+    unsigned long long int *address_as_ull = (unsigned long long int *)address;
+    unsigned long long int old = *address_as_ull, assumed;
+
+    do
+    {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed, __double_as_longlong(val + __longlong_as_double(assumed)));
+    } while (assumed != old);
+
+    return __longlong_as_double(old);
+}
+
+// Function to perform atomic subtraction for doubles
+__device__ double atomicSubDouble(double *address, double val)
+{
+    unsigned long long int *address_as_ull = (unsigned long long int *)address;
+    unsigned long long int old = *address_as_ull, assumed;
+
+    do
+    {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed, __double_as_longlong(__longlong_as_double(assumed) - val));
+    } while (assumed != old);
+
+    return __longlong_as_double(old);
 }

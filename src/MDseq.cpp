@@ -209,7 +209,7 @@ int main()
 
     scanf("%lf", &rho);
 
-    //N = 10 * 216;
+    // N = 10 * 216;
     Vol = N / (rho * NA);
 
     Vol /= VolFac;
@@ -355,7 +355,7 @@ int main()
     printf("\n  THE COMPRESSIBILITY (unitless):          %15.5f \n", Z);
     printf("\n  TOTAL VOLUME (m^3):                      %10.5e \n", Vol * VolFac);
     printf("\n  NUMBER OF PARTICLES (unitless):          %i \n", N);
-    
+
     fclose(tfp);
     fclose(ofp);
     fclose(afp);
@@ -459,13 +459,12 @@ double Kinetic()
     return kin;
 }
 
-
 // aqui
 //   Uses the derivative of the Lennard-Jones potential to calculate
 //   the forces on each atom.  Then uses a = F/m to calculate the
 //   accelleration of each atom.
 void computeAccelerations()
-{   
+{
     // int i
     int i, j;
     double quot, term, termSquared;
@@ -474,14 +473,15 @@ void computeAccelerations()
 
     Pot = 0.;
 
-    for (i = 0; i < N; i++) {
+    for (i = 0; i < N; i++)
+    {
         a[i][0] = 0;
         a[i][1] = 0;
         a[i][2] = 0;
-    } 
+    }
 
-    for (i = 0; i < N-1; i++) 
-    {  // set all accelerations to zero
+    for (i = 0; i < N - 1; i++)
+    { // set all accelerations to zero
         for (j = i + 1; j < N; j++)
         {
             rSqd = 0.;
@@ -495,11 +495,11 @@ void computeAccelerations()
             rSqd += rij[2] * rij[2];
 
             quot = sigma / rSqd;
-            term = quot*quot*quot;
+            term = quot * quot * quot;
             termSquared = term * term;
 
             Pot += 4 * epsilon * (termSquared - term);
-            
+
             rSqd7 = 1. / (rSqd * rSqd * rSqd * rSqd * rSqd * rSqd * rSqd);
             rSqd4 = 1. / (rSqd * rSqd * rSqd * rSqd);
 
