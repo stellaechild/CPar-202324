@@ -2,10 +2,10 @@ GCC = gcc
 CUDA = nvcc
 SRC = src/
 GCC_CFLAGS = -fopenmp -pg -ftree-vectorize -msse4 -mavx -mtune=native -fno-omit-frame-pointer -march=native -Wall -Wextra -Wpedantic -Wfatal-errors -Wshadow -Wcast-align -ffast-math -Ofast # -fno-exceptions -fno-rtti
-CUDA_FLAGS = -fopenmp -pg -ftree-vectorize -fno-omit-frame-pointer -march=native -std=c++11 -arch=sm_35 -Wno-deprecated-gpu-targets
+CUDA_FLAGS = -pg -std=c++11 -arch=sm_35 -Wno-deprecated-gpu-targets -O2
 
 .DEFAULT_GOAL = all
-all: MDseq.exe MDpar.exe
+all: MDseq.exe MDpar.exe MDcuda.exe
 
 MDseq.exe: $(SRC)/MDseq.cpp
 	module load gcc/11.2.0; \
@@ -31,10 +31,11 @@ runpar:
 
 #runcuda:
 
-testscript:
-	sbatch $(SRC)script.sh
+test_seq_script:
+	sbatch $(SRC)MDseq.sh
 
-testseqscript:
-	sbatch $(SRC)test.sh
+test_par_script:
+	sbatch $(SRC)MDpar.sh
 
-#testcudascript:
+test_cuda_script:
+	sbatch $(SRC)MDcuda.sh<

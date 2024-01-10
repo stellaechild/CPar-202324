@@ -89,9 +89,9 @@ double gaussdist();
 //  Initialize velocities according to user-supplied initial Temperature (Tinit)
 void initializeVelocities();
 //  Compute mean squared velocity from particle velocities
-void MeanSquaredVelocity();
+double MeanSquaredVelocity();
 //  Compute total kinetic energy from particle mass and velocities
-void Kinetic();
+double Kinetic();
 
 int main()
 {
@@ -329,8 +329,8 @@ int main()
         //  Instantaneous mean velocity squared, Temperature, Pressure
         //  Potential, and Kinetic Energy
         //  We would also like to use the IGL to try to see if we can extract the gas constant
-        MeanSquaredVelocity();
-        Kinetic();
+        mvs = MeanSquaredVelocity();
+        KE = Kinetic();
 
         // Temperature from Kinetic Theory
         Temp = m * mvs / (3 * kB) * TempFac;
@@ -373,6 +373,36 @@ int main()
     fclose(afp);
 
     return 0;
+}
+
+// Function to perform atomic addition for doubles
+__device__ double atomicAddDouble(double *address, double val)
+{
+    unsigned long long int *address_as_ull = (unsigned long long int *)address;
+    unsigned long long int old = *address_as_ull, assumed;
+
+    do
+    {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed, __double_as_longlong(val + __longlong_as_double(assumed)));
+    } while (assumed != old);
+
+    return __longlong_as_double(old);
+}
+
+// Function to perform atomic subtraction for doubles
+__device__ double atomicSubDouble(double *address, double val)
+{
+    unsigned long long int *address_as_ull = (unsigned long long int *)address;
+    unsigned long long int old = *address_as_ull, assumed;
+
+    do
+    {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed, __double_as_longlong(__longlong_as_double(assumed) - val));
+    } while (assumed != old);
+
+    return __longlong_as_double(old);
 }
 
 //  Function prototypes
@@ -426,56 +456,15 @@ void initialize()
      */
 }
 
-void computeAccelerations()
-{
-    double(**d_r), (**d_a);
-    double *d_Pot, *d_sigma, *d_epsilon;
-
-    cudaMalloc((void **)&d_r, sizeof(double[MAXPART][3]));
-    cudaMalloc((void **)&d_a, sizeof(double[MAXPART][3]));
-
-    cudaMalloc((void **)&d_Pot, sizeof(double));
-    cudaMalloc((void **)&d_sigma, sizeof(double));
-    cudaMalloc((void **)&d_epsilon, sizeof(double));
-
-    cudaMemcpy(d_r, r, sizeof(double[MAXPART][3]), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_a, a, sizeof(double[MAXPART][3]), cudaMemcpyHostToDevice);
-
-    cudaMemcpy(d_Pot, &Pot, sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_sigma, &sigma, sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_epsilon, &epsilon, sizeof(double), cudaMemcpyHostToDevice);
-
-    int threadsPerBlock = 256;
-    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
-
-    computeAccelerationsCUDA<<<blocksPerGrid, threadsPerBlock>>>(d_r, d_a, d_Pot, d_sigma, d_epsilon);
-    // cudaDeviceSynchronize(); Este comando pode vir a ser precisa, caso os resultados estejam errados.
-
-    cudaMemcpy(a, d_a, sizeof(double[MAXPART][3]), cudaMemcpyDeviceToHost);
-
-    cudaMemcpy(&Pot, d_Pot, sizeof(double), cudaMemcpyDeviceToHost);
-
-    cudaFree(d_r);
-    cudaFree(d_a);
-    cudaFree(d_Pot);
-    cudaFree(d_sigma);
-    cudaFree(d_epsilon);
-}
-
-// CUDA kernel for computing forces and accelerations
-__global__ void computeAccelerationsCUDA(double **r_device, double **a_device, double *Pot_device, double *sigma_device, double *epsilon_device)
+__global__ void computeAccelerationsCUDA(double *r_device, double *a_device, double *Pot_device, double *sigma_device, double *epsilon_device)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int j;
-    double quot, term, termSquared;
-    double f, rSqd, rSqd7, rSqd4;
-    double rij[3]; // position of i relative to j
 
     if (i < N - 1)
     {
-        a_device[i][0] = 0;
-        a_device[i][1] = 0;
-        a_device[i][2] = 0;
+        a_device[i * 3] = 0.0;
+        a_device[i * 3 + 1] = 0.0;
+        a_device[i * 3 + 2] = 0.0;
 
         for (int j = i + 1; j < N; j++)
         {
@@ -501,14 +490,50 @@ __global__ void computeAccelerationsCUDA(double **r_device, double **a_device, d
 
             double f = 24.0 * (2 * rSqd7 - rSqd4);
 
-            atomicAddDouble(&(a_device[i][0]), rij[0] * f);
-            atomicSubDouble(&(a_device[j][0]), rij[0] * f);
-            atomicAddDouble(&(a_device[i][1]), rij[1] * f);
-            atomicSubDouble(&(a_device[j][1]), rij[1] * f);
-            atomicAddDouble(&(a_device[i][2]), rij[2] * f);
-            atomicSubDouble(&(a_device[j][2]), rij[2] * f);
+            atomicAddDouble(&(a_device[i * 3]), rij[0] * f);
+            atomicSubDouble(&(a_device[j * 3]), rij[0] * f);
+            atomicAddDouble(&(a_device[i * 3 + 1]), rij[1] * f);
+            atomicSubDouble(&(a_device[j * 3 + 1]), rij[1] * f);
+            atomicAddDouble(&(a_device[i * 3 + 2]), rij[2] * f);
+            atomicSubDouble(&(a_device[j * 3 + 2]), rij[2] * f);
         }
     }
+}
+
+void computeAccelerations()
+{
+    double *d_r, *d_a;
+    double *d_Pot, *d_sigma, *d_epsilon;
+
+    cudaMalloc((void **)&d_r, sizeof(double) * MAXPART * 3); // Flattened 1D array for positions
+    cudaMalloc((void **)&d_a, sizeof(double) * MAXPART * 3); // Flattened 1D array for accelerations
+
+    cudaMalloc((void **)&d_Pot, sizeof(double));
+    cudaMalloc((void **)&d_sigma, sizeof(double));
+    cudaMalloc((void **)&d_epsilon, sizeof(double));
+
+    cudaMemcpy(d_r, r, sizeof(double) * MAXPART * 3, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a, a, sizeof(double) * MAXPART * 3, cudaMemcpyHostToDevice);
+
+    cudaMemcpy(d_Pot, &Pot, sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_sigma, &sigma, sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_epsilon, &epsilon, sizeof(double), cudaMemcpyHostToDevice);
+
+    int threadsPerBlock = 128;
+    int blocksPerGrid = (MAXPART + threadsPerBlock - 1) / threadsPerBlock;
+
+    computeAccelerationsCUDA<<<blocksPerGrid, threadsPerBlock>>>(d_r, d_a, d_Pot, d_sigma, d_epsilon);
+    cudaDeviceSynchronize();
+
+    cudaMemcpy(a, d_a, sizeof(double) * MAXPART * 3, cudaMemcpyDeviceToHost);
+
+    cudaMemcpy(&Pot, d_Pot, sizeof(double), cudaMemcpyDeviceToHost);
+
+    cudaFree(d_r);
+    cudaFree(d_a);
+    cudaFree(d_Pot);
+    cudaFree(d_sigma);
+    cudaFree(d_epsilon);
 }
 
 // returns sum of dv/dt*m/A (aka Pressure) from elastic collisions with walls
@@ -579,94 +604,94 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     return psum / (6 * L * L);
 }
 
-void MeanSquaredVelocity()
-{
-    double(**d_v);
-    double *d_mvs;
+double Kinetic()
+{ // Write Function here!
 
-    cudaMalloc((void **)&d_v, sizeof(double[MAXPART][3]));
-    cudaMalloc((void **)&d_mvs, sizeof(double));
+    double v2, kin;
 
-    cudaMemcpy(d_v, v, sizeof(double[MAXPART][3]), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_mvs, &mvs, sizeof(double), cudaMemcpyHostToDevice);
+    kin = 0.;
+    for (int i = 0; i < N; i++)
+    {
 
-    int threadsPerBlock = 256;
-    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        v2 = 0.;
+        for (int j = 0; j < 3; j++)
+        {
 
-    MeanSquaredVelocityCUDA<<<blocksPerGrid, threadsPerBlock>>>(d_v, d_mvs);
-    // cudaDeviceSynchronize(); Este comando pode vir a ser precisa, caso os resultados estejam errados.
+            v2 += v[i][j] * v[i][j];
+        }
+        kin += m * v2 / 2.;
+    }
 
-    cudaMemcpy(v, d_v, sizeof(double[MAXPART][3]), cudaMemcpyDeviceToHost);
-
-    cudaMemcpy(&mvs, d_mvs, sizeof(double[MAXPART][3]), cudaMemcpyDeviceToHost);
-
-    cudaFree(d_v);
-    cudaFree(d_mvs);
+    // printf("  Total Kinetic Energy is %f\n",N*mvs*m/2.);
+    return kin;
 }
 
-__global__ void MeanSquaredVelocityCUDA(double **v, double *result)
+//  Function to calculate the averaged velocity squared
+double MeanSquaredVelocity()
 {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     double vx2 = 0;
     double vy2 = 0;
     double vz2 = 0;
+    double v2;
+
+    for (int i = 0; i < N; i++)
+    {
+
+        vx2 = vx2 + v[i][0] * v[i][0];
+        vy2 = vy2 + v[i][1] * v[i][1];
+        vz2 = vz2 + v[i][2] * v[i][2];
+    }
+    v2 = (vx2 + vy2 + vz2) / N;
+
+    // printf("  Average of x-component of velocity squared is %f\n",v2);
+    return v2;
+}
+/*
+__global__ void KineticCUDA(double *d_v, double *d_m, double *d_KE)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx < N)
     {
-        vx2 = vx2 + v[idx][0] * v[idx][0];
-        vy2 = vy2 + v[idx][1] * v[idx][1];
-        vz2 = vz2 + v[idx][2] * v[idx][2];
-    }
+        double v0 = d_v[idx * 3];     // Accessing x component
+        double v1 = d_v[idx * 3 + 1]; // Accessing y component
+        double v2 = d_v[idx * 3 + 2]; // Accessing z component
 
-    atomicAddDouble(result, ((vx2 + vy2 + vz2) / N));
+        double v_squared = v0 * v0 + v1 * v1 + v2 * v2;
+        atomicAddDouble(d_KE, ((*d_m) * v_squared / 2.0));
+    }
 }
 
 void Kinetic()
 {
-    double(**d_v);
+    double *d_v;
     double *d_m;
     double *d_KE;
 
-    cudaMalloc((void **)&d_v, sizeof(double[MAXPART][3]));
+    cudaMalloc((void **)&d_v, sizeof(double) * MAXPART * 3); // Flattened 1D array
 
     cudaMalloc((void **)&d_m, sizeof(double));
     cudaMalloc((void **)&d_KE, sizeof(double));
 
-    cudaMemcpy(d_v, v, sizeof(double[MAXPART][3]), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_v, v, sizeof(double) * MAXPART * 3, cudaMemcpyHostToDevice);
 
     cudaMemcpy(d_m, &m, sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(d_KE, &KE, sizeof(double), cudaMemcpyHostToDevice);
 
-    int threadsPerBlock = 256;
-    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+    int threadsPerBlock = 128;
+    int blocksPerGrid = (MAXPART + threadsPerBlock - 1) / threadsPerBlock;
 
     KineticCUDA<<<blocksPerGrid, threadsPerBlock>>>(d_v, d_m, d_KE);
+    cudaDeviceSynchronize();
 
-    cudaMemcpy(v, d_v, sizeof(double[MAXPART][3]), cudaMemcpyDeviceToHost);
-
-    cudaMemcpy(&d_KE, &KE, sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(v, d_v, sizeof(double) * MAXPART * 3, cudaMemcpyDeviceToHost);
 
     cudaFree(d_v);
     cudaFree(d_m);
     cudaFree(d_KE);
 }
-
-__global__ void KineticCUDA(double **d_v, double *d_m, double *d_KE)
-{
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    double v2;
-
-    if (idx < N)
-    {
-        v2 = 0.;
-        v2 += v[idx][0] * v[idx][0];
-        v2 += v[idx][1] * v[idx][1];
-        v2 += v[idx][2] * v[idx][2];
-        atomicAddDouble(d_KE, ((*d_m) * v2 / 2.0));
-    }
-}
-
+*/
 void initializeVelocities()
 {
 
@@ -761,34 +786,4 @@ double gaussdist()
         available = false;
         return gset;
     }
-}
-
-// Function to perform atomic addition for doubles
-__device__ double atomicAddDouble(double *address, double val)
-{
-    unsigned long long int *address_as_ull = (unsigned long long int *)address;
-    unsigned long long int old = *address_as_ull, assumed;
-
-    do
-    {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed, __double_as_longlong(val + __longlong_as_double(assumed)));
-    } while (assumed != old);
-
-    return __longlong_as_double(old);
-}
-
-// Function to perform atomic subtraction for doubles
-__device__ double atomicSubDouble(double *address, double val)
-{
-    unsigned long long int *address_as_ull = (unsigned long long int *)address;
-    unsigned long long int old = *address_as_ull, assumed;
-
-    do
-    {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed, __double_as_longlong(__longlong_as_double(assumed) - val));
-    } while (assumed != old);
-
-    return __longlong_as_double(old);
 }
