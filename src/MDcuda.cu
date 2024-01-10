@@ -91,7 +91,7 @@ void initializeVelocities();
 //  Compute mean squared velocity from particle velocities
 double MeanSquaredVelocity();
 //  Compute total kinetic energy from particle mass and velocities
-double Kinetic();
+void Kinetic();
 
 int main()
 {
@@ -330,7 +330,7 @@ int main()
         //  Potential, and Kinetic Energy
         //  We would also like to use the IGL to try to see if we can extract the gas constant
         mvs = MeanSquaredVelocity();
-        KE = Kinetic();
+        Kinetic();
 
         // Temperature from Kinetic Theory
         Temp = m * mvs / (3 * kB) * TempFac;
@@ -441,19 +441,6 @@ void initialize()
 
     // Call function to initialize velocities
     initializeVelocities();
-
-    /***********************************************
-     *   Uncomment if you want to see what the initial positions and velocities are
-     printf("  Printing initial positions!\n");
-     for (i=0; i<N; i++) {
-     printf("  %6.3e  %6.3e  %6.3e\n",r[i][0],r[i][1],r[i][2]);
-     }
-
-     printf("  Printing initial velocities!\n");
-     for (i=0; i<N; i++) {
-     printf("  %6.3e  %6.3e  %6.3e\n",v[i][0],v[i][1],v[i][2]);
-     }
-     */
 }
 
 __global__ void computeAccelerationsCUDA(double *r_device, double *a_device, double *Pot_device, double *sigma_device, double *epsilon_device)
@@ -604,28 +591,6 @@ double VelocityVerlet(double dt, int iter, FILE *fp)
     return psum / (6 * L * L);
 }
 
-double Kinetic()
-{ // Write Function here!
-
-    double v2, kin;
-
-    kin = 0.;
-    for (int i = 0; i < N; i++)
-    {
-
-        v2 = 0.;
-        for (int j = 0; j < 3; j++)
-        {
-
-            v2 += v[i][j] * v[i][j];
-        }
-        kin += m * v2 / 2.;
-    }
-
-    // printf("  Total Kinetic Energy is %f\n",N*mvs*m/2.);
-    return kin;
-}
-
 //  Function to calculate the averaged velocity squared
 double MeanSquaredVelocity()
 {
@@ -647,7 +612,7 @@ double MeanSquaredVelocity()
     // printf("  Average of x-component of velocity squared is %f\n",v2);
     return v2;
 }
-/*
+
 __global__ void KineticCUDA(double *d_v, double *d_m, double *d_KE)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -691,7 +656,7 @@ void Kinetic()
     cudaFree(d_m);
     cudaFree(d_KE);
 }
-*/
+
 void initializeVelocities()
 {
 
